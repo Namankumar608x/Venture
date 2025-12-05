@@ -24,6 +24,7 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 }));
+mongo();
 
 app.use("/",home);
 
