@@ -1,0 +1,34 @@
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import mongo from "./src/db/mongo.js";
+import home from "./src/routes/home.js";
+import auth from "./src/routes/auth.js";
+const app=express();
+app.use(express.json());
+const PORT=5005;
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // mobile apps send no origin
+    if (
+      origin.includes("localhost") ||
+      origin.includes("127.0.0.1") ||
+      origin.includes("192.168.") // allow all local IPs
+    ) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+}));
+
+app.use("/",home);
+
+
+app.listen(PORT,()=>{
+    console.log(`server running on: ${PORT}`);
+   
+})
