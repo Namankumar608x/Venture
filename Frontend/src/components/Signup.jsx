@@ -27,9 +27,9 @@ function Signup() {
 
     setIsLoading(true);
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/Signup", {
+      const res = await axios.post("http://localhost:5005/auth/signup", {
         username: formData.username,
-        fullName: formData.fullName,
+        name: formData.fullName,
         email: formData.email,
         password: formData.password,
       });
@@ -59,19 +59,19 @@ function Signup() {
         <div className="text-center mb-8">
           <div className="inline-block">
             <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">
-              Learn<span className="text-blue-500">Flex</span>
+              Ven<span className="text-blue-500">ture</span>
             </h1>
             <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"></div>
           </div>
           <p className="text-slate-400 mt-4 text-sm">
-            Join the ultimate sports learning platform
+            Join the ultimate sports arena
           </p>
         </div>
 
         {/* Signup Card */}
         <div className="bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 p-8">
           <h2 className="text-2xl font-bold text-white mb-2">Create Account</h2>
-          <p className="text-slate-400 text-sm mb-6">Start your journey to excellence</p>
+          <p className="text-slate-400 text-sm mb-6">Start your journey to compete</p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Username */}
