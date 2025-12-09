@@ -1,14 +1,16 @@
 import mongoose from "mongoose";
 
-const clubSchema = new mongoose.Schema({
-    admin:{type: mongoose.Schema.Types.ObjectId,
-        ref: "User",},
-   managers:[{type: mongoose.Schema.Types.ObjectId,
-            ref: "User",}],
-   events:[{type: mongoose.Schema.Types.ObjectId,
-        ref: "Event",}],
-  createdAt: { type: Date, default: Date.now }
-});
+const clubSchema=new mongoose.Schema({
+  name:{type:String,required:true,trim:true},
+  description:{type:String,default:"",trim:true},
 
-const clubModel = mongoose.model("Club", clubSchema);
+  admin:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true},
+
+  managers:[{type:mongoose.Schema.Types.ObjectId,ref:"User",default:[]}],
+
+  events:[{type:mongoose.Schema.Types.ObjectId,ref:"Event",default:[]}],
+
+},{timestamps:true});
+
+const clubModel=mongoose.model("Club",clubSchema);
 export default clubModel;
