@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState,useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -7,7 +7,17 @@ function Login() {
     emailOrUsername: "",
     password: "",
   });
-
+useEffect(() => {
+  const verifyUser = async () => {
+    const accessToken = localStorage.getItem("accesstoken") 
+    if (accessToken) {
+      console.log("accces token found");
+      navigate("/dashboard"); 
+    } else {
+      navigate("/Login");    }
+  };
+  verifyUser();
+}, []);
   const [message, setMessage] = useState("");
   const navigate = useNavigate();
 
@@ -19,15 +29,18 @@ function Login() {
     e.preventDefault();
 
     try {
-      const res = await axios.post("http://localhost:5005/auth/Login", {
-        emailOrUsername: formData.emailOrUsername,
+      const res = await axios.post("http://localhost:5005/auth/login", {
+        email: formData.emailOrUsername,
         password: formData.password,
       });
 
-      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("accesstoken", res.data.accessToken);
+      localStorage.setItem("refreshtoken", res.data.refreshToken);
       localStorage.setItem("user", JSON.stringify(res.data.user));
 
       setMessage("Login Successful");
+      console.log(res.data);
+      console.log("Login Successful");
       navigate("/dashboard");
     } catch (err) {
       console.log(err);

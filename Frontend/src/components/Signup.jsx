@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState,useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -9,6 +9,17 @@ function Signup() {
     email: "",
     password: "",
   });
+  useEffect(() => {
+  const verifyUser = async () => {
+    const accessToken = localStorage.getItem("accesstoken") 
+    if (accessToken) {
+      console.log("accces token found");
+      navigate("/dashboard"); 
+    } else {
+      navigate("/Login");    }
+  };
+  verifyUser();
+}, []);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
