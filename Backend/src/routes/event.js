@@ -17,6 +17,9 @@ if (check.admin.toString()===userid || check.managers.map(id=>id.toString()).inc
     const event=new Event({name: eventname,admin:userid,club:clubid});
     const newevent=await event.save();
     check.events.push(newevent._id);
+    const user=await User.findById(userid);
+    user.events.push(newevent._id);
+    await user.save();
     await check.save();
     return res.status(200).json({message:"event created"});
 }

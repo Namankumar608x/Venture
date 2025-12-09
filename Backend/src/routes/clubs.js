@@ -7,7 +7,7 @@ import auth from "../middlewares/auth.js";
 const router=express.Router();
 
 //crreating club or current user as admin
-router.post("/",auth,async(req,res)=>{
+router.post("/new",auth,async(req,res)=>{
   try{
     // baki detailed info baadme add karenge
      const {name}=req.body;
