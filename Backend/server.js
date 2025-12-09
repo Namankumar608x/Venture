@@ -6,6 +6,7 @@ import home from "./src/routes/home.js";
 import auth from "./src/routes/auth.js";
 const app=express();
 app.use(express.json());
+dotenv.config();
 const PORT=5005;
 app.use(cors({
   origin: (origin, callback) => {
@@ -27,6 +28,7 @@ app.use(cors({
 mongo();
 
 app.use("/",home);
+app.use("/auth",auth);
 
 
 app.listen(PORT,()=>{

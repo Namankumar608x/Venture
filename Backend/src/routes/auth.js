@@ -20,8 +20,8 @@ function generateRefreshToken(user) {
   return jwt.sign({ id: user._id }, REFRESH_SECRET, { expiresIn: "7d" });
 }
 
-router.post("/signup/:id?",async(req,res)=>{
-    const id=req.params.id;
+router.post("/signup",async(req,res)=>{
+    // const id=req.params.id;
 const {username,name,email,password}=req.body;
 try {
     const check1=await User.findOne({email});
@@ -29,17 +29,18 @@ try {
     if(check1 || check2) return res.status(400).json({ MessageEvent: "User already exists!" });
     const hashedPassword = await bcrypt.hash(password, 10);
     const user=new User({username,name,email,password:hashedPassword});
-    if(id){
-        const check=await Club.findById({id});
-        if(check){
-           user.clubs.push(id);
-        }
-        else{
-            return res.status(500).json({message:"Club Invite Id doesnt exist or broken! Signup not sucessfull!"});
-        }
+    // if(id){
+    //     const check=await Club.findById({id});
+    //     if(check){
+    //        user.clubs.push(id);
+    //     }
+    //     else{
+    //         return res.status(500).json({message:"Club Invite Id doesnt exist or broken! Signup not sucessfull!"});
+    //     }
    
-    }
+    // }
     const saved=await user.save();
+    console.log(saved.toJSON());
     const accessToken = generateAccessToken(saved);
     const refreshToken = generateRefreshToken(saved);
     saved.currentRefreshToken = refreshToken;
@@ -63,8 +64,8 @@ try {
 
 
 });
-router.post("/login/:id?", async (req, res) => {
-    const id=req.params.id;
+router.post("/login", async (req, res) => {
+    // const id=req.params.id;
   const { email, password } = req.body;
   try {
     
@@ -76,18 +77,18 @@ router.post("/login/:id?", async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, exist.password);
     if (!isMatch) return res.status(401).json({ error: "Invalid credentials" });
-    if(id){
-        const check=await Club.findById({id});
-        if(!check){
-          return res.status(500).json({message:"Club Invite Id doesnt exist or broken! Signup not sucessfull!"}); 
-        }
+    // if(id){
+    //     const check=await Club.findById({id});
+    //     if(!check){
+    //       return res.status(500).json({message:"Club Invite Id doesnt exist or broken! Signup not sucessfull!"}); 
+    //     }
         
-    }
+    // }
     const accessToken = generateAccessToken(exist);
     const refreshToken = generateRefreshToken(exist);
     exist.currentRefreshToken = refreshToken;
     await exist.save();
-
+    
     return res.json({
       message: "Login successful",
       accessToken,
