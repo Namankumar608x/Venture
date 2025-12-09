@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import mongo from "./src/db/mongo.js";
 import home from "./src/routes/home.js";
 import auth from "./src/routes/auth.js";
-
+import clubsRouter from "./src/routes/clubs.js";
 const app=express();
 app.use(express.json());
 dotenv.config();
@@ -30,6 +30,7 @@ mongo();
 
 app.use("/",home);
 app.use("/auth",auth);
+app.use("/clubs",clubsRouter);
 
 app.listen(PORT,()=>{
     console.log(`server running on: ${PORT}`);

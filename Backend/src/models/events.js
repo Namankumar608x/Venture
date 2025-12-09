@@ -1,19 +1,12 @@
 import mongoose from "mongoose";
 
-const eventSchema = new mongoose.Schema({
-      name:{type:String},
-  admin:{type: mongoose.Schema.Types.ObjectId,
-          ref: "User",},
-  coordinator:[{type: mongoose.Schema.Types.ObjectId,
-          ref: "User",}],
-  managers:[{type: mongoose.Schema.Types.ObjectId,
-        ref: "User",}],
-  players:[{type: mongoose.Schema.Types.ObjectId,
-        ref: "User",}],
-  club:{type: mongoose.Schema.Types.ObjectId,
-        ref: "Club",},
-  createdAt: { type: Date, default: Date.now }
-});
+const eventSchema=new mongoose.Schema({
+  admin:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true},
+  coordinator:[{type:mongoose.Schema.Types.ObjectId,ref:"User",default:[]}],
+  managers:[{type:mongoose.Schema.Types.ObjectId,ref:"User",default:[]}],
+  players:[{type:mongoose.Schema.Types.ObjectId,ref:"User",default:[]}],
+  club:{type:mongoose.Schema.Types.ObjectId,ref:"Club",required:true},
+},{timestamps:true});
 
-const eventModel = mongoose.model("Event", eventSchema);
+const eventModel=mongoose.model("Event",eventSchema);
 export default eventModel;

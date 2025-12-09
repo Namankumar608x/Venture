@@ -48,7 +48,7 @@ function Signup() {
       // Use state management instead of localStorage
       setMessage("Registration successful");
       console.log(res.data);
-      navigate("/dashboard");
+      navigate("/home");//home page per bhej rhaa hu
     } catch (err) {
       console.log(err);
       setMessage(err.response?.data?.message || "Registration failed");
