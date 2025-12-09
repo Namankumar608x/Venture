@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import User from "../models/user.js";
 import Club from "../models/club.js";
+import Event from "../models/events.js";
+import authenticate from "../middlewares/auth.js";
 const router=express.Router();
 
 const ACCESS_SECRET = process.env.ACCESS_SECRET || "ava";

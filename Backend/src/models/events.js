@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 const eventSchema = new mongoose.Schema({
+      name:{type:String},
   admin:{type: mongoose.Schema.Types.ObjectId,
           ref: "User",},
   coordinator:[{type: mongoose.Schema.Types.ObjectId,
