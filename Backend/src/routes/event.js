@@ -11,7 +11,7 @@ router.post("/new",authenticate,async(req,res)=>{
 const userid=req.user.id;
 const {clubid,eventname}=req.body;
 try {
-    const check=await Club.findById(clubid);
+    const check=await Club.findById(clubid);//club exist karta hai ya nahi
 if(!check){
     return res.status(404).json({message:"No club found!"});
 }
@@ -34,6 +34,8 @@ else{
 }
 
 });
+
+
 router.post("/promote",authenticate,async(req,res)=>{
 const adminid=req.user.id;
 const {userid,eventid,post}=req.body;
@@ -141,5 +143,6 @@ try {
     
 }
 });
+
 
 export default router;
