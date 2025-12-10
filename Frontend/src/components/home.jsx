@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from "react";
 import axios from "axios";
 import {useNavigate} from "react-router-dom";
+import {jwtDecode} from "jwt-decode";
 
 function Home(){
   const [adminTournaments,setAdminTournaments]=useState([]);
@@ -15,7 +16,21 @@ function Home(){
 
   const getAuthConfig=()=>{
     const token=localStorage.getItem("accessToken");
+    console.log("[getAuthConfig] token:", token);
     if(!token){
+      setMessage("Please login again, session expired.");
+      return null;
+    }
+    try{
+      const payload = jwtDecode(token);
+      if(payload.exp && Date.now()/1000 > payload.exp){
+        localStorage.removeItem("accessToken");
+        setMessage("Please login again, session expired.");
+        return null;
+      }
+    }catch(e){
+      console.warn("[getAuthConfig] jwt decode failed", e);
+      localStorage.removeItem("accessToken");
       setMessage("Please login again, session expired.");
       return null;
     }
@@ -29,28 +44,40 @@ function Home(){
 
   const fetchTournaments=async()=>{
     try{
+      setMessage(""); // clear previous message
       const config=getAuthConfig();
-      if(!config)return;
+      if(!config){
+        console.log("[fetchTournaments] no config, aborting fetch");
+        return;
+      }
 
+      console.log("[fetchTournaments] calling APIs with config", config);
       const [adminRes,participantRes]=await Promise.all([
-        axios.get("http://localhost:5005/api/clubs/my-admin",config),
-        axios.get("http://localhost:5005/api/clubs/participant",config),
+       axios.get("http://localhost:5005/clubs/my-admin", config)
+,
+        axios.get("http://localhost:5005/clubs/participant",config),
       ]);
 
       setAdminTournaments(adminRes.data.tournaments||[]);
       setParticipantTournaments(participantRes.data.tournaments||[]);
     }catch(err){
-      console.error(err);
+      console.error("[fetchTournaments] error", err);
       setMessage(err.response?.data?.error||"Failed to load tournaments");
     }
   };
 
   useEffect(()=>{
+    // ensure axios uses any stored token as default (optional)
+    const tok = localStorage.getItem("accessToken");
+    if(tok) axios.defaults.headers.common["Authorization"] = `Bearer ${tok}`;
+
     fetchTournaments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   const handleCreateTournament=async(e)=>{
     e.preventDefault();
+    console.log("[handleCreateTournament] clicked");
     if(!newTournamentName.trim()){
       setMessage("Tournament name is required");
       return;
@@ -59,19 +86,22 @@ function Home(){
     setMessage("");
     try{
       const config=getAuthConfig();
-      if(!config)return;
+      if(!config){
+        console.log("[handleCreateTournament] missing config, aborting");
+        setIsCreating(false);
+        return;
+      }
       const res=await axios.post(
-        "http://localhost:5005/api/clubs",
+        "http://localhost:5005/clubs/new",
         {name:newTournamentName.trim()},
         config
       );
+      console.log("[handleCreateTournament] server response", res.data);
       setMessage("Tournament created successfully");
       setNewTournamentName("");
-      // refresh list
       fetchTournaments();
-      console.log("Created:",res.data);
     }catch(err){
-      console.error(err);
+      console.error("[handleCreateTournament] error",err);
       setMessage(err.response?.data?.error||"Failed to create tournament");
     }finally{
       setIsCreating(false);
@@ -80,6 +110,7 @@ function Home(){
 
   const handleJoinTournament=async(e)=>{
     e.preventDefault();
+    console.log("[handleJoinTournament] clicked");
     if(!joinTournamentId.trim()){
       setMessage("Tournament ID is required to join");
       return;
@@ -88,18 +119,22 @@ function Home(){
     setMessage("");
     try{
       const config=getAuthConfig();
-      if(!config)return;
+      if(!config){
+        console.log("[handleJoinTournament] missing config, aborting");
+        setIsJoining(false);
+        return;
+      }
       const res=await axios.post(
-        "http://localhost:5005/api/clubs/join",
+        "http://localhost:5005/clubs/join",
         {clubId:joinTournamentId.trim()},
         config
       );
+      console.log("[handleJoinTournament] server response", res.data);
       setMessage("Joined tournament successfully");
       setJoinTournamentId("");
       fetchTournaments();
-      console.log("Joined:",res.data);
     }catch(err){
-      console.error(err);
+      console.error("[handleJoinTournament] error",err);
       setMessage(err.response?.data?.error||"Failed to join tournament");
     }finally{
       setIsJoining(false);
@@ -108,7 +143,8 @@ function Home(){
 
   const handleLogout=()=>{
     localStorage.removeItem("accessToken");
-    navigate("/login");
+    delete axios.defaults.headers.common["Authorization"];
+    navigate("/login", { replace: true });
   };
 
   return(
