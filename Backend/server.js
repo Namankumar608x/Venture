@@ -18,7 +18,6 @@ app.use(express.json());
 
 const PORT = 5005;
 
-// CORS (your existing config)
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -41,16 +40,13 @@ app.use(
 
 mongo();
 
-// REST routes
 app.use("/", home);
 app.use("/auth", auth);
 app.use("/clubs", club);
 app.use("/event", event);
 
-// Create HTTP server for both Express & Socket.IO
 const httpServer = http.createServer(app);
 
-// Create socket.io instance
 const io = new IOServer(httpServer, {
   cors: {
     origin: [/localhost/, /127\.0\.0\.1/, /192\.168\./],
@@ -58,7 +54,6 @@ const io = new IOServer(httpServer, {
   },
 });
 
-// Initialize socket handlers
 setupSocket(io);
 
 httpServer.listen(PORT, () => {
