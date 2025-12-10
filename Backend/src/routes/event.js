@@ -121,28 +121,46 @@ return res.status(200).json({
 
 
 });
+router.post("/join-event",authenticate,async(req,res)=>{
+  try {
+    const playerid=req.user.id;
+    const {scheduleid,eventid}=req.body;
+    const user=await User.findById(playerid);
+const event=await Event.findById(eventid);
+ if (!event)
+      return res.status(404).json({ message: "Event not found" });
 
-router.post("/live-score/start",authenticate,checkmanager,async(req,res)=>{
-try {
-    const {eventid,sceduleid,teamA,teamB}=req.body;
-      if (!eventid || !scheduleid || !teamA || !teamB)
-      return res.status(400).json({ message: "Missing fields" });
+  if (event.players.map(id => id.toString()).includes(playerid)) return res.status(400).json({message:"player already in event"});
+event.players.push(playerid);
+await event.save();
+user.events.push(eventid);
+await user.save();
+return res.status(200).json({message:"player added"});
 
-    const event = await Event.findById(eventid);
-    if (!event) return res.status(404).json({ message: "Event not found" });
+  } catch (error) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
 
-    // Check if schedule exists
-    const scheduleExists = event.schedule.some(
-      (s) => s._id.toString() === scheduleid.toString()
-    );
-
-    if (!scheduleExists)
-      return res.status(404).json({ message: "Schedule not found" });
-    
-} catch (error) {
-    
-}
 });
+
+
+router.post("/match/create", async (req, res) => {
+  const { eventId, teamA, teamB, scheduleId,time} = req.body;
+
+  const match = await matchModel.create({
+    eventId,
+    scheduleId,
+    teamA: { teamId: teamA },
+    teamB: { teamId: teamB },
+    time
+  });
+
+
+  res.json({ message: "Match created", match });
+});
+
+
 
 
 export default router;

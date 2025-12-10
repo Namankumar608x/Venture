@@ -24,26 +24,16 @@ const eventSchema=new mongoose.Schema({
     date: Date,
     time: String,
     location: String,
-    description: String,
-
-    // Teams inside the match
-    teams: [
-      {
-        teamname: { type: String, required: true },
-        players: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
-      }
-    ],
-
-    // Live score for this schedule
-    liveScore: {
-      enabled: { type: Boolean, default: false },
-      scoreA: { type: Number, default: 0 },
-      scoreB: { type: Number, default: 0 },
-      lastUpdated: Date
-    }
+    description: String
   }
 ],
-     
+     teams: [
+  {
+    _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+    teamname: { type: String, required: true },
+    players: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
+  }
+],
         qualifiedPlayers: [
         {
             user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

@@ -11,10 +11,15 @@ function Home(){
   const [message,setMessage]=useState("");
   const [isCreating,setIsCreating]=useState(false);
   const [isJoining,setIsJoining]=useState(false);
-
+  const [login,setlogin]=useState(false);
   const navigate=useNavigate();
 
-  const getAuthConfig=()=>{
+  useEffect(() => {
+  const token = localStorage.getItem("accessToken");
+  if (token) setlogin(true);
+}, []);
+ 
+   const getAuthConfig=()=>{
     const token=localStorage.getItem("accessToken");
     console.log("[getAuthConfig] token:", token);
     if(!token){
@@ -41,7 +46,6 @@ function Home(){
       },
     };
   };
-
   const fetchTournaments=async()=>{
     try{
       setMessage(""); // clear previous message
@@ -142,9 +146,19 @@ function Home(){
   };
 
   const handleLogout=()=>{
+  if(!login){
+navigate("/login");
+  }
+  else{
+
     localStorage.removeItem("accessToken");
     delete axios.defaults.headers.common["Authorization"];
-    navigate("/login", { replace: true });
+    setlogin(false);
+    setMessage("Please login again");
+    setParticipantTournaments("");
+    
+  }
+    
   };
 
   return(
@@ -166,11 +180,13 @@ function Home(){
               Create or join tournaments and manage your sports journey.
             </p>
           </div>
+      
           <button
             onClick={handleLogout}
             className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 text-sm border border-slate-700 hover:bg-slate-700 transition"
           >
-            Logout
+         {login ? "Logout" : "Login"}
+          
           </button>
         </div>
 

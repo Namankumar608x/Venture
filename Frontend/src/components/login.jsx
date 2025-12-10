@@ -47,9 +47,13 @@ function Login() {
         email: formData.emailOrUsername,
         password: formData.password,
       });
+    console.log("Access token BEFORE saving:", res.data.accessToken);
 
       // Save token BEFORE navigation (single canonical key)
+
       const token = res.data.accessToken;
+console.log("Token variable:", token);
+
       if (token) {
         localStorage.setItem("accessToken", token);
         localStorage.setItem("refreshToken", res.data.refreshToken || "");
