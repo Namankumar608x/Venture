@@ -99,5 +99,47 @@ try {
     res.status(500).json({ message: "Server error" });
   }
 });
+router.post("/new-schedule",authenticate,checkmanager,async(req,res)=>{
+    try {
+const {eventid,title,date,time,location,description}=req.body;
+if(!eventid || !title || !date || !time || !location ) return res.status(400).json({ message: "Missing fields" });
+const event=await Event.findById(eventid);
+ if (!event) return res.status(404).json({ message: "Event not found" });
+event.schedule.push({
+   _id: new mongoose.Types.ObjectId(), title,date,time,location,description
+});
+await event.save();
+return res.status(200).json({
+    message:`New schedule for ${event.name} created `
+});
+    } catch (error) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+    }
+
+
+});
+
+router.post("/live-score/start",authenticate,checkmanager,async(req,res)=>{
+try {
+    const {eventid,sceduleid,teamA,teamB}=req.body;
+      if (!eventid || !scheduleid || !teamA || !teamB)
+      return res.status(400).json({ message: "Missing fields" });
+
+    const event = await Event.findById(eventid);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    // Check if schedule exists
+    const scheduleExists = event.schedule.some(
+      (s) => s._id.toString() === scheduleid.toString()
+    );
+
+    if (!scheduleExists)
+      return res.status(404).json({ message: "Schedule not found" });
+    
+} catch (error) {
+    
+}
+});
 
 export default router;

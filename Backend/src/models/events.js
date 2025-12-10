@@ -16,25 +16,34 @@ const eventSchema=new mongoose.Schema({
         }
     ],
     // Match/round scheduling
-    schedule: [
-        {
-            title: String,    // "Pre-Qualifiers", "Round 1", etc.
-            date: Date,
-            time: String,
-            location: String,
-            description: String
-        }
+   schedule: [
+  {
+    _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+
+    title: String,
+    date: Date,
+    time: String,
+    location: String,
+    description: String,
+
+    // Teams inside the match
+    teams: [
+      {
+        teamname: { type: String, required: true },
+        players: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
+      }
     ],
-     liveScore: {
-        enabled: { type: Boolean, default: false },
-        scoreData: {
-            teamA: String,
-            teamB: String,
-            scoreA: { type: Number, default: 0 },
-            scoreB: { type: Number, default: 0 },
-            lastUpdated: Date
-        }
-    },
+
+    // Live score for this schedule
+    liveScore: {
+      enabled: { type: Boolean, default: false },
+      scoreA: { type: Number, default: 0 },
+      scoreB: { type: Number, default: 0 },
+      lastUpdated: Date
+    }
+  }
+],
+     
         qualifiedPlayers: [
         {
             user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
