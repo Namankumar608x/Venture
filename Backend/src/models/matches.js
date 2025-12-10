@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const matchSchema=new mongoose.Schema({
-eventId: {
+eventid: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Event"
   },
@@ -16,7 +16,7 @@ eventId: {
     score: Number
   },
   
-  scheduleId: {
+  scheduleid: {
     type: mongoose.Schema.Types.ObjectId,
   }, time:{type:String}
 

@@ -3,7 +3,14 @@ import User from "../models/user.js";
 import Club from "../models/club.js";
 import Event from "../models/events.js";
 import authenticate from "../middlewares/auth.js";
+import Match from "../models/matches.js";
+import Team from "../models/team.js";
+
 import {checkadmin,checkmanager} from "../middlewares/roles.js";
+
+const checkEvent = async (eventId) => {
+  return await Event.findById(eventId);
+};
 
 const router=express.Router();
 
@@ -86,7 +93,7 @@ else{
 });
 router.post("/updates",authenticate,checkmanager,async(req,res)=>{
 try {
-    const {userid}=req.user.id;
+    const userid=req.user.id;
     const {eventid,message}=req.body;
     const event=await Event.findById(eventid);
     if (!event) return res.status(404).json({ message: "Event not found" });
@@ -144,13 +151,71 @@ return res.status(200).json({message:"player added"});
 
 });
 
+router.post("/new-team",authenticate,async(req,res)=>{
+  try {
+    const adminid=req.user.id;
+const {teamname,eventid}=req.body;
+const event=await checkEvent(eventid);
+if(!event) return res.status(404).json({ message: "Event not found" });
+const team=new Team({
+  teamname,
+  leader:adminid,
+  
+  eventid
+});
+team.members.push(adminid);
+const fteam=await team.save();
+event.teams.push(fteam._id);
+await event.save();
+return res.status(200).json({message:"new team created"});
+  } catch (error) {
+      console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
 
-router.post("/match/create", async (req, res) => {
-  const { eventId, teamA, teamB, scheduleId,time} = req.body;
 
-  const match = await matchModel.create({
-    eventId,
-    scheduleId,
+});
+
+router.post("/add-team_member",authenticate,async(req,res)=>{
+try {
+  const adminid=req.user.id;
+  const {userid,teamid}=req.body;
+
+  const team=await Team.findById(teamid);
+  if(!team) return res.status(404).json({ message: "team not found" });
+    if(team.leader.toString()!==adminid) return res.status(400).json({message:"only leader can add members"});
+   if (team.members.map(id => id.toString()).includes(userid)) {
+      return res.status(400).json({ message: "User already a member of this team" });
+    }
+const event = await Event.findById(team.eventid);
+if (!event.players.map(id => id.toString()).includes(userid.toString()))
+    return res.status(400).json({ message: "User must join event first" });
+  team.members.push(userid);
+  await team.save();
+  return res.status(200).json({message:"new member added to team"});
+} catch (error) {
+      console.error(err);
+    res.status(500).json({ message: "Server error" });
+}
+});
+
+
+
+router.post("/match/create",authenticate,checkmanager, async (req, res) => {
+  const { eventid, teamA, teamB, scheduleid,time} = req.body;
+  const event = await Event.findById(eventid);
+if (!event) return res.status(404).json({ message: "Event not found" });
+
+const teamIds = event.teams.map(id => id.toString());
+if (!teamIds.includes(teamA.toString()) || !teamIds.includes(teamB.toString()))
+  return res.status(400).json({ message: "Teams not part of event" });
+
+
+const schedule = event.schedule.id(scheduleid);
+if (!schedule) return res.status(400).json({ message: "Schedule not part of event" });
+  const match = await Match.create({
+    eventid,
+    scheduleid,
     teamA: { teamId: teamA },
     teamB: { teamId: teamB },
     time

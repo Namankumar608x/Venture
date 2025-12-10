@@ -5,7 +5,7 @@ const eventSchema=new mongoose.Schema({
       description:{type:String},
   admin:[{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true}],
   managers:[{type:mongoose.Schema.Types.ObjectId,ref:"User",default:[]}],
-  players:[{type:mongoose.Schema.Types.ObjectId,ref:"User",default:[]}],
+
   club:{type:mongoose.Schema.Types.ObjectId,ref:"Club",required:true},
   // Event updates (announcements, notices, schedule, results)
     updates: [
@@ -27,13 +27,7 @@ const eventSchema=new mongoose.Schema({
     description: String
   }
 ],
-     teams: [
-  {
-    _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
-    teamname: { type: String, required: true },
-    players: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
-  }
-],
+     teams:[{type:mongoose.Schema.Types.ObjectId,ref:"Team"}],
         qualifiedPlayers: [
         {
             user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
