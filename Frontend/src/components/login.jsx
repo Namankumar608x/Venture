@@ -12,7 +12,7 @@ useEffect(() => {
     const accessToken = localStorage.getItem("accesstoken") 
     if (accessToken) {
       console.log("accces token found");
-      navigate("/dashboard"); 
+      navigate("/home"); 
     } else {
       navigate("/Login");    }
   };
@@ -41,7 +41,7 @@ useEffect(() => {
       setMessage("Login Successful");
       console.log(res.data);
       console.log("Login Successful");
-      navigate("/dashboard");
+      navigate("/home");
     } catch (err) {
       console.log(err);
       setMessage("Invalid credentials");

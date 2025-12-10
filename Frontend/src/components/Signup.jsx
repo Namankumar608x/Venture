@@ -14,7 +14,7 @@ function Signup() {
     const accessToken = localStorage.getItem("accesstoken") 
     if (accessToken) {
       console.log("accces token found");
-      navigate("/dashboard"); 
+      navigate("/home"); 
     } else {
       navigate("/Login");    }
   };
