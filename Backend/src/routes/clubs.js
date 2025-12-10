@@ -50,7 +50,7 @@ router.post("/join",auth,async(req,res)=>{
       {$addToSet:{clubs:clubId}}
     );
 
-    return res.json({
+    return res.status(200).json({
       message:"Joined tournament successfully",
       tournament:club,
     });
