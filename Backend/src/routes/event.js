@@ -9,11 +9,11 @@ router.post("/new",authenticate,async(req,res)=>{
 const userid=req.user.id;
 const {clubid,eventname}=req.body;
 try {
-    const check=await Club.findById(clubid);
+    const check=await Club.findById(clubid);//club exist karta hai ya nahi
 if(!check){
     return res.status(404).json({message:"No club found!"});
 }
-if (check.admin.toString()===userid || check.managers.map(id=>id.toString()).includes(userid)){
+if (check.admin.toString()===userid || check.managers.map(id=>id.toString()).includes(userid)){//ya toh admin ne login kiya ya koi manager ne login kiya 
     const event=new Event({name: eventname,admin:userid,club:clubid});
     const newevent=await event.save();
     check.events.push(newevent._id);
@@ -32,5 +32,4 @@ else{
 }
 
 });
-
 export default router;
