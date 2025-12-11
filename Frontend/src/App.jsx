@@ -6,7 +6,7 @@ import Signup from "./components/signup";
 import Home from "./components/home";
 import EventsDashboard from "./components/event"; 
 import EventPage from "./components/eventpage";
-
+import Schedule from "./components/schedule";
 import Layout from "./components/Layout";
 
 // ---------- PROTECTED ROUTE ----------
@@ -56,6 +56,16 @@ export default function App() {
             <ProtectedRoute>
               <Layout>
                 <EventPage />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/events/:clubid/:eventId/:scheduleid"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Schedule />
               </Layout>
             </ProtectedRoute>
           }

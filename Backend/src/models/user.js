@@ -11,6 +11,8 @@ const userSchema=new mongoose.Schema({
   notifications: [
   {
     message: String,
+    requser:{type:mongoose.Schema.Types.ObjectId,ref:"User"},
+    teamid:{type:mongoose.Schema.Types.ObjectId,ref:"Team"},
     createdAt: { type: Date, default: Date.now }
   }
 ],

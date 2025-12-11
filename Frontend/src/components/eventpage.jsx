@@ -1,18 +1,20 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import { useParams } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 
 export default function EventPage() {
-  const { eventId } = useParams();
-
+  const { clubid,eventId } = useParams();
+const [admins, setAdmins] = useState([]);
+const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [event, setEvent] = useState(null);
   const [role, setRole] = useState("participant");
   const [currentUser, setCurrentUser] = useState("");
   const [message, setMessage] = useState("");
-
-  // Forms
+const [searchQuery, setSearchQuery] = useState("");
+const [searchResults, setSearchResults] = useState([]);
   const [scheduleForm, setScheduleForm] = useState({
     title: "",
     date: "",
@@ -20,6 +22,7 @@ export default function EventPage() {
     location: "",
     description: "",
   });
+  const navigate=useNavigate();
 
   const [teamForm, setTeamForm] = useState({ teamname: "" });
   const [promoteForm, setPromoteForm] = useState({
@@ -33,7 +36,48 @@ export default function EventPage() {
     teamB: "",
     time: "",
   });
+useEffect(() => {
+  const delay = setTimeout(() => {
+    if (searchQuery.trim() === "") {
+      setSearchResults([]);
+      return;
+    }
+    console.log(searchQuery)
 
+   axios.post(
+  "http://localhost:5005/auth/search-users",
+  { q: searchQuery, eventid: eventId },
+  getAuthConfig()
+)
+      .then(res => setSearchResults(res.data))
+      .catch(() => setSearchResults([]));
+
+  }, 300); // debounce timeout
+
+  return () => clearTimeout(delay);
+}, [searchQuery]);
+const fetchRoles = async () => {
+  try {
+    const config = getAuthConfig();
+    if (!config) return;
+
+    const res = await axios.get(
+      `http://localhost:5005/events/roles/${eventId}`,
+      config
+    );
+
+    setAdmins(res.data.admins);
+    setManagers(res.data.managers);
+
+  } catch (err) {
+    console.log("Role fetch error:", err.response?.data);
+  }
+};
+
+useEffect(() => {
+  fetchEvent();
+  fetchRoles();
+}, [eventId]);
   // -----------------------------------------------------
   // AUTH HEADER
   // -----------------------------------------------------
@@ -84,17 +128,18 @@ export default function EventPage() {
     fetchEvent();
   }, [eventId]);
 
-  // -----------------------------------------------------
-  // GENERIC POST HANDLER
-  // -----------------------------------------------------
+ 
   const postAction = async (url, body, successMsg) => {
     try {
       const config = getAuthConfig();
       if (!config) return;
 
-      await axios.post(url, body, config);
-      setMessage(successMsg);
+      const res=await axios.post(url, body, config);
+     
       fetchEvent();
+      
+      return res;
+     
     } catch (err) {
       setMessage(err.response?.data?.message || "Action failed");
     }
@@ -114,17 +159,17 @@ export default function EventPage() {
 
   const handleTeamCreate = (e) => {
     e.preventDefault();
-    postAction(
-      "http://localhost:5005/events/new-team",
+    const res=postAction(
+      "http://localhost:5005/teams/new-team",
       { teamname: teamForm.teamname, eventid: eventId },
       "Team created"
-    );
-    setTeamForm({ teamname: "" });
+    );    
+  setTeamForm({ teamname: "" });
   };
 
   const sendJoinRequest = (teamId) => {
     postAction(
-      "http://localhost:5005/events/team/join-request",
+      "http://localhost:5005/teams/team/join-request",
       { teamid: teamId },
       "Join request sent!"
     );
@@ -132,7 +177,7 @@ export default function EventPage() {
 
   const approveRequest = (teamId, userId) => {
     postAction(
-      "http://localhost:5005/events/team/approve-request",
+      "http://localhost:5005/teams/team/approve-request",
       { teamid: teamId, userid: userId },
       "User added to team"
     );
@@ -197,40 +242,79 @@ export default function EventPage() {
           <p className="text-slate-400 text-sm">Event ID: {event?._id}</p>
           <p className="text-xs text-blue-400 mt-1">Role: {role}</p>
         </div>
+        <div className={card}>
+  <h3 className="font-semibold mb-3">Event Roles</h3>
+
+  <div className="mb-3">
+    <h4 className="text-sm text-blue-400 mb-1">Admins</h4>
+    {admins.length === 0 ? (
+      <p className="text-xs text-slate-500">No admins</p>
+    ) : (
+      admins.map(a => (
+        <p key={a._id} className="text-sm">
+          {a.username} — <span className="text-slate-400">{a.email}</span>
+        </p>
+      ))
+    )}
+  </div>
+
+  <div>
+    <h4 className="text-sm text-emerald-400 mb-1">Managers</h4>
+    {managers.length === 0 ? (
+      <p className="text-xs text-slate-500">No managers</p>
+    ) : (
+      managers.map(m => (
+        <p key={m._id} className="text-sm">
+          {m.username} — <span className="text-slate-400">{m.email}</span>
+        </p>
+      ))
+    )}
+  </div>
+</div>
+
 
         <div className="grid lg:grid-cols-3 gap-6">
+          
 
           {/* ---------------- SCHEDULES ---------------- */}
           <div className={`${card} lg:col-span-2`}>
-            <h2 className="text-xl font-semibold mb-4">Schedules</h2>
+                <h2 className="text-xl font-semibold mb-4">Schedules</h2>
+  
 
-            <div className="space-y-3 mb-4">
-              {event.schedule.length === 0 ? (
-                <p className="text-slate-400 text-sm">No schedules yet.</p>
-              ) : (
-                event.schedule.map((s) => (
-                  <div
-                    key={s._id}
-                    className="p-3 bg-slate-700/50 rounded-lg border border-slate-600"
-                  >
-                    <div className="font-medium">{s.title}</div>
-                    <div className="text-xs text-slate-400">
-                      {s.date} • {s.time}
-                    </div>
-                    <div className="text-xs text-slate-400">{s.location}</div>
-                    {s.description && (
-                      <div className="text-sm text-slate-300 mt-1">
-                        {s.description}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
+    <div className="space-y-3 mb-4">
+      {event.schedule.length === 0 ? (
+        <p className="text-slate-400 text-sm">No schedules yet.</p>
+      ) : (
+        event.schedule.map((s) => (
+          <div
+            key={s._id}
+            onClick={() => navigate(`/events/${clubid}/${eventId}/${s._id}`)}
+            className="p-3 bg-slate-700/50 rounded-lg border border-slate-600"
+          >
+            <div className="font-medium">{s.title}</div>
+            <div className="text-xs text-slate-400">
+              {s.date} • {s.time}
             </div>
+            <div className="text-xs text-slate-400">{s.location}</div>
+            {s.description && (
+              <div className="text-sm text-slate-300 mt-1">
+                {s.description}
+              </div>
+              
+            )}
+           
+          </div>
+        ))
+      )}
+    </div>
+
 
             {/* Admin-only create schedule */}
+            
             {role !== "participant" && (
+              
               <form onSubmit={handleSchedule} className="space-y-3">
+            
                 <input
                   className={input}
                   placeholder="Title"
@@ -314,6 +398,7 @@ export default function EventPage() {
                         Request to Join
                       </button>
                     )}
+                    
 
                     {/* APPROVAL PANEL FOR LEADER */}
                     {isLeader && (
@@ -361,6 +446,7 @@ export default function EventPage() {
             </form>
           </div>
         </div>
+        
 
         {/* ---------------- ADMIN PANEL ---------------- */}
         {role !== "participant" && (
@@ -370,14 +456,37 @@ export default function EventPage() {
             <div className={card}>
               <h3 className="font-semibold mb-2">Promote User</h3>
               <form onSubmit={handlePromote} className="space-y-2">
-                <input
-                  className={input}
-                  placeholder="User ID"
-                  value={promoteForm.userid}
-                  onChange={(e) =>
-                    setPromoteForm({ ...promoteForm, userid: e.target.value })
-                  }
-                />
+               <input
+  className={input}
+  placeholder="Search username or email"
+  value={searchQuery}
+  onChange={(e) => {
+    setSearchQuery(e.target.value);
+    setPromoteForm({
+      ...promoteForm,
+      userid: e.target.value,   // still store input
+    });
+  }}
+/>
+{searchResults.length > 0 && (
+  <div className="mt-1 bg-gray-800 rounded-lg p-2 max-h-48 overflow-y-auto">
+    {searchResults.map((u) => (
+      <div
+        key={u._id}
+        className="p-2 hover:bg-gray-700 cursor-pointer rounded-md"
+        onClick={() => {
+          setPromoteForm({ ...promoteForm, userid: u._id });
+          setSearchQuery(u.username || u.email);
+          setSearchResults([]);
+        }}
+      >
+        <p className="text-sm font-semibold">{u.username}</p>
+        <p className="text-xs text-gray-400">{u.email}</p>
+      </div>
+    ))}
+  </div>
+)}
+
                 <select
                   className={input}
                   value={promoteForm.post}

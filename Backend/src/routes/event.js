@@ -12,8 +12,6 @@ const checkEvent = async (eventId) => {
   return await Event.findById(eventId);
 };
 
-
-
 router.post("/new",authenticate,async(req,res)=>{
 const userid=req.user.id;
 const {clubid,eventname}=req.body;
@@ -41,9 +39,42 @@ else{
 }
 
 });
+// router.post("/promote", authenticate, checkadmin, async (req, res) => {
+//   try {
+//     console.log("/promote route hit");
+//     const { userid, post, eventid } = req.body;
 
+//     if (!userid || !post)
+//       return res.status(400).json({ message: "Missing data" });
 
-router.post("/promote",authenticate,async(req,res)=>{
+//     let user;
+
+//     // If userid is a valid ObjectId → search by _id
+//     if (mongoose.Types.ObjectId.isValid(userid)) {
+//       user = await User.findById(userid);
+//     } 
+//     else {
+//       // Otherwise, treat it as username OR email
+//       user = await User.findOne({
+//         $or: [{ email: userid }, { username: userid }]
+//       });
+//     }
+
+//     if (!user)
+//       return res.status(404).json({ message: "User does not exist" });
+
+//     // Update role
+//     user.role = post;
+//     await user.save();
+
+//     return res.json({ message: "User promoted successfully", user });
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
+router.post("/promote",authenticate,checkmanager,async(req,res)=>{
 const adminid=req.user.id;
 const {userid,eventid,post}=req.body;
 try {
@@ -54,8 +85,13 @@ const event=await Event.findById(eventid);
 
   if (!event) return res.status(404).json({ message: "Event not found" });
   const clubid=event.club;
- if (!check.clubs.map(id => id.toString()).includes(clubid.toString()))
-    return res.status(401).json({ message: "Unauthorized" });
+  const club=await Club.findById(clubid);
+ if (!check.clubs.map(id => id.toString()).includes(clubid.toString())){
+  check.clubs.push(clubid);
+  await check.save();
+
+ }
+   
   
   if (!event.admin.map(id => id.toString()).includes(adminid))
       return res.status(401).json({ message: "Unauthorized" });
@@ -91,6 +127,7 @@ else{
 }
 
 });
+
 router.post("/updates",authenticate,checkmanager,async(req,res)=>{
 try {
     const userid=req.user.id;
@@ -108,6 +145,7 @@ try {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 router.post("/new-schedule",authenticate,async(req,res)=>{
     try {
 const {eventid,title,date,time,location,description}=req.body;
@@ -151,53 +189,6 @@ return res.status(200).json({message:"player added"});
 
 });
 
-router.post("/new-team",authenticate,async(req,res)=>{
-  try {
-    const adminid=req.user.id;
-const {teamname,eventid}=req.body;
-const event=await checkEvent(eventid);
-if(!event) return res.status(404).json({ message: "Event not found" });
-const team=new Team({
-  teamname,
-  leader:adminid,
-  
-  eventid
-});
-team.members.push(adminid);
-const fteam=await team.save();
-event.teams.push(fteam._id);
-await event.save();
-return res.status(200).json({message:"new team created"});
-  } catch (error) {
-      console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-
-
-});
-
-router.post("/add-team_member",authenticate,async(req,res)=>{
-try {
-  const adminid=req.user.id;
-  const {userid,teamid}=req.body;
-
-  const team=await Team.findById(teamid);
-  if(!team) return res.status(404).json({ message: "team not found" });
-    if(team.leader.toString()!==adminid) return res.status(400).json({message:"only leader can add members"});
-   if (team.members.map(id => id.toString()).includes(userid)) {
-      return res.status(400).json({ message: "User already a member of this team" });
-    }
-const event = await Event.findById(team.eventid);
-if (!event.players.map(id => id.toString()).includes(userid.toString()))
-    return res.status(400).json({ message: "User must join event first" });
-  team.members.push(userid);
-  await team.save();
-  return res.status(200).json({message:"new member added to team"});
-} catch (error) {
-      console.error(err);
-    res.status(500).json({ message: "Server error" });
-}
-});
 
 router.post("/match/create",authenticate,checkmanager, async (req, res) => {
   const { eventid, teamA, teamB, scheduleid,time} = req.body;
@@ -223,61 +214,9 @@ if (!schedule) return res.status(400).json({ message: "Schedule not part of even
   res.json({ message: "Match created", match });
 });
 
-router.post("/team/join-request", authenticate, async (req, res) => {
-  const { teamid } = req.body;
-  const userid = req.user.id;
-
-  const team = await Team.findById(teamid);
-  if (!team) return res.status(404).json({ message: "Team not found" });
-
-  // Already requested?
-  if (team.requests.some(r => r.user.toString() === userid))
-    return res.status(400).json({ message: "Already requested" });
-
-  // Already a member?
-  if (team.members.includes(userid))
-    return res.status(400).json({ message: "You are already a member" });
-
-  team.requests.push({ user: userid });
-  await team.save();
-    const leader = await User.findById(team.leader);
-  leader.notifications.push({
-    message: `User ${req.user.name} requested to join team ${team.teamname}`,
-    createdAt: new Date()
-  });
-  await leader.save();
-
-  return res.json({ message: "Join request sent!" });
-});
-router.post("/team/approve-request", authenticate, async (req, res) => {
-  const { teamid, userid } = req.body;
-
-  const team = await Team.findById(teamid);
-  if (!team) return res.status(404).json({ message: "Team not found" });
-
-  // Only leader/admin allowed
-  if (team.leader.toString() !== req.user.id)
-    return res.status(403).json({ message: "Not authorized" });
-
-  // Find request
-  const reqIndex = team.requests.findIndex(r => r.user.toString() === userid);
-  if (reqIndex === -1) return res.status(400).json({ message: "No such request" });
-
-  // Approve
-  team.members.push(userid);
-  team.requests.splice(reqIndex, 1);
-  await team.save();
-
-  res.json({ message: "User added to team" });
-});
-
 
 
 //get routes-
-// GET: fetch one event (full details)
-
-
-// GET: fetch all events for a particular club
 router.get("/club/:clubId", authenticate, async (req, res) => {
   try {
     const { clubId } = req.params;
@@ -386,7 +325,21 @@ let isManager = event.managers?.map(id => id.toString()).includes(userId);
   }
 });
 
+router.get("/roles/:eventid", authenticate, async (req, res) => {
+  try {
+    const eventid = req.params.eventid;
 
+    const event = await Event.findById(eventid).populate("admin managers", "username email name");
+    if (!event) return res.status(404).json({ message: "Event not found" });
 
+    return res.json({
+      admins: event.admin || [],
+      managers: event.managers || [],
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 export default router;

@@ -15,10 +15,9 @@ function EventsDashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const tok = localStorage.getItem("accessToken");
-    if (tok) axios.defaults.headers.common["Authorization"] = `Bearer ${tok}`;
+    const token = localStorage.getItem("accessToken");
+    if (token) axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     fetchClubs();
-    // eslint-disable-next-line
   }, []);
 
   const getAuthConfig = () => {
@@ -158,7 +157,7 @@ const fetchEventsForClub = async (clubId) => {
                   <option value="">Select a club (tournament)</option>
                   {myAdminClubs.map((c) => (
                     <option key={c._id || c.id} value={c._id || c.id}>
-                      {c.name || `Club ${c._id || c.id}`} — ID: {c._id || c.id}
+                      {c.name || `Club ${c._id || c.id}`} 
                     </option>
                   ))}
                 </select>

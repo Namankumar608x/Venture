@@ -284,7 +284,7 @@ navigate("/login");
                         </div>
                       </div>
                       {/* later this button can go to tournament dashboard */}
-                      <button className="text-xs px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white">
+                      <button onClick={() => navigate(`/events/${t._id}`)} className="text-xs px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white">
                         Open
                       </button>
                     </div>

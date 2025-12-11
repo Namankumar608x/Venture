@@ -5,6 +5,7 @@ import User from "../models/user.js";
 import Club from "../models/club.js";
 import Event from "../models/events.js";
 import authenticate from "../middlewares/auth.js";
+import {checkadmin,checkmanager} from "../middlewares/roles.js";
 const router=express.Router();
 
 const ACCESS_SECRET = process.env.ACCESS_SECRET || "ava";
@@ -107,6 +108,47 @@ router.post("/login", async (req, res) => {
     return res.status(500).json({ error: "Server error occurred!" });
   }
 });
+router.get("/search",authenticate,checkmanager,async(req,res)=>{
+try {
+  const {inputid,eventid}=req.body;
+const event=await Event.findById(eventid);
+ // Search user by username OR email
+    const user = await User.findOne({
+      $or: [{ username: inputid }, { email: inputid }]
+    });
+
+    if (!user) return res.status(400).json({ message: "User not found" });
+return res.status(200).json({
+      message: "User found",
+      user
+    });
+} catch (error) {
+   console.error(err);
+    res.status(500).json({ message: "Server error" });
+  
+}
+});
+router.post("/search-users", authenticate, checkmanager, async (req, res) => {
+  try {
+    const { q, eventid } = req.body;
+
+    if (!q || q.trim() === "") return res.json([]);
+
+    const users = await User.find({
+      $or: [
+        { username: { $regex: q, $options: "i" } },
+        { email: { $regex: q, $options: "i" } }
+      ]
+    }).limit(10);
+    
+    return res.json(users);
+    
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 router.post("/refresh", async (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken)
