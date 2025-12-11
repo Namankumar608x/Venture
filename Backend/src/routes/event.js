@@ -4,15 +4,15 @@ import Club from "../models/club.js";
 import Event from "../models/events.js";
 import authenticate from "../middlewares/auth.js";
 import Match from "../models/matches.js";
+import mongoose from "mongoose";
 import Team from "../models/team.js";
-
 import {checkadmin,checkmanager} from "../middlewares/roles.js";
-
+const router=express.Router();
 const checkEvent = async (eventId) => {
   return await Event.findById(eventId);
 };
 
-const router=express.Router();
+
 
 router.post("/new",authenticate,async(req,res)=>{
 const userid=req.user.id;
@@ -108,7 +108,7 @@ try {
     res.status(500).json({ message: "Server error" });
   }
 });
-router.post("/new-schedule",authenticate,checkmanager,async(req,res)=>{
+router.post("/new-schedule",authenticate,async(req,res)=>{
     try {
 const {eventid,title,date,time,location,description}=req.body;
 if(!eventid || !title || !date || !time || !location ) return res.status(400).json({ message: "Missing fields" });
@@ -199,8 +199,6 @@ if (!event.players.map(id => id.toString()).includes(userid.toString()))
 }
 });
 
-
-
 router.post("/match/create",authenticate,checkmanager, async (req, res) => {
   const { eventid, teamA, teamB, scheduleid,time} = req.body;
   const event = await Event.findById(eventid);
@@ -223,6 +221,169 @@ if (!schedule) return res.status(400).json({ message: "Schedule not part of even
 
 
   res.json({ message: "Match created", match });
+});
+
+router.post("/team/join-request", authenticate, async (req, res) => {
+  const { teamid } = req.body;
+  const userid = req.user.id;
+
+  const team = await Team.findById(teamid);
+  if (!team) return res.status(404).json({ message: "Team not found" });
+
+  // Already requested?
+  if (team.requests.some(r => r.user.toString() === userid))
+    return res.status(400).json({ message: "Already requested" });
+
+  // Already a member?
+  if (team.members.includes(userid))
+    return res.status(400).json({ message: "You are already a member" });
+
+  team.requests.push({ user: userid });
+  await team.save();
+    const leader = await User.findById(team.leader);
+  leader.notifications.push({
+    message: `User ${req.user.name} requested to join team ${team.teamname}`,
+    createdAt: new Date()
+  });
+  await leader.save();
+
+  return res.json({ message: "Join request sent!" });
+});
+router.post("/team/approve-request", authenticate, async (req, res) => {
+  const { teamid, userid } = req.body;
+
+  const team = await Team.findById(teamid);
+  if (!team) return res.status(404).json({ message: "Team not found" });
+
+  // Only leader/admin allowed
+  if (team.leader.toString() !== req.user.id)
+    return res.status(403).json({ message: "Not authorized" });
+
+  // Find request
+  const reqIndex = team.requests.findIndex(r => r.user.toString() === userid);
+  if (reqIndex === -1) return res.status(400).json({ message: "No such request" });
+
+  // Approve
+  team.members.push(userid);
+  team.requests.splice(reqIndex, 1);
+  await team.save();
+
+  res.json({ message: "User added to team" });
+});
+
+
+
+//get routes-
+// GET: fetch one event (full details)
+
+
+// GET: fetch all events for a particular club
+router.get("/club/:clubId", authenticate, async (req, res) => {
+  try {
+    const { clubId } = req.params;
+
+    const club = await Club.findById(clubId).populate("events");
+
+    if (!club) return res.status(404).json({ message: "Club not found" });
+
+    return res.status(200).json({
+      club: club.name,
+      events: club.events
+    });
+  } catch (error) {
+    console.error("GET /events/club/:clubId", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+// GET: events user created or joined
+router.get("/", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const events = await Event.find({
+      $or: [
+        { admin: userId },
+        { managers: userId },
+        { players: userId }
+      ]
+    });
+
+    return res.status(200).json({ events });
+  } catch (error) {
+    console.error("GET /events", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+router.get("/:eventId/teams", authenticate, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    const event = await Event.findById(eventId).populate("teams");
+
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    return res.status(200).json({ teams: event.teams });
+  } catch (error) {
+    console.error("GET /events/:eventId/teams", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+router.get("/:eventId/schedules", authenticate, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    const event = await Event.findById(eventId);
+
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    return res.status(200).json({ schedules: event.schedule });
+  } catch (error) {
+    console.error("GET /events/:eventId/schedules", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+ router.get("/club/:clubId", authenticate, async (req, res) => {
+  try {
+    const { clubId } = req.params;
+
+    const club = await Club.findById(clubId).populate("events");
+
+    if (!club) {
+      return res.status(404).json({ message: "Club not found" });
+    }
+
+    return res.status(200).json({
+      club: club.name,
+      events: club.events
+    });
+  } catch (error) {
+    console.error("GET /events/club/:clubId error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+router.get("/:eventId", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const event = await Event.findById(req.params.eventId)
+      .populate("teams")
+      .populate("schedule");
+
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    // Check roles
+    let isAdmin = event.admin?.map(id => id.toString()).includes(userId);
+
+let isManager = event.managers?.map(id => id.toString()).includes(userId);
+
+
+    res.json({
+      event,
+      role: isAdmin ? "admin" : isManager ? "manager" : "participant"
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 

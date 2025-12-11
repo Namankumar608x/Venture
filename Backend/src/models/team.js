@@ -15,7 +15,12 @@ const teamSchema = new mongoose.Schema({
       ref: "User"
     }
   ],
-
+requests: [
+  {
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    requestedAt: { type: Date, default: Date.now }
+  }
+],
   invitedEmails: [String],  // store emails of invited players
 
   eventid: {

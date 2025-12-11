@@ -1,0 +1,507 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useParams } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
+
+export default function EventPage() {
+  const { eventId } = useParams();
+
+  const [loading, setLoading] = useState(true);
+  const [event, setEvent] = useState(null);
+  const [role, setRole] = useState("participant");
+  const [currentUser, setCurrentUser] = useState("");
+  const [message, setMessage] = useState("");
+
+  // Forms
+  const [scheduleForm, setScheduleForm] = useState({
+    title: "",
+    date: "",
+    time: "",
+    location: "",
+    description: "",
+  });
+
+  const [teamForm, setTeamForm] = useState({ teamname: "" });
+  const [promoteForm, setPromoteForm] = useState({
+    userid: "",
+    post: "manager",
+  });
+  const [updateMsg, setUpdateMsg] = useState("");
+  const [matchForm, setMatchForm] = useState({
+    scheduleid: "",
+    teamA: "",
+    teamB: "",
+    time: "",
+  });
+
+  // -----------------------------------------------------
+  // AUTH HEADER
+  // -----------------------------------------------------
+  const getAuthConfig = () => {
+    let token = localStorage.getItem("accessToken");
+    if (!token) return null;
+
+    try {
+      const payload = jwtDecode(token);
+      setCurrentUser(payload.id); // store logged-in user
+
+      if (payload.exp * 1000 < Date.now()) {
+        localStorage.removeItem("accessToken");
+        return null;
+      }
+    } catch {
+      localStorage.removeItem("accessToken");
+      return null;
+    }
+
+    return { headers: { Authorization: `Bearer ${token}` } };
+  };
+
+  // -----------------------------------------------------
+  // FETCH EVENT
+  // -----------------------------------------------------
+  const fetchEvent = async () => {
+    setLoading(true);
+    try {
+      const config = getAuthConfig();
+      if (!config) return;
+
+      const res = await axios.get(
+        `http://localhost:5005/events/${eventId}`,
+        config
+      );
+
+      setEvent(res.data.event);
+      setRole(res.data.role);
+    } catch (err) {
+      setMessage("Failed to load event");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEvent();
+  }, [eventId]);
+
+  // -----------------------------------------------------
+  // GENERIC POST HANDLER
+  // -----------------------------------------------------
+  const postAction = async (url, body, successMsg) => {
+    try {
+      const config = getAuthConfig();
+      if (!config) return;
+
+      await axios.post(url, body, config);
+      setMessage(successMsg);
+      fetchEvent();
+    } catch (err) {
+      setMessage(err.response?.data?.message || "Action failed");
+    }
+  };
+
+  // -----------------------------------------------------
+  // ACTION FUNCTIONS
+  // -----------------------------------------------------
+  const handleSchedule = (e) => {
+    e.preventDefault();
+    postAction(
+      "http://localhost:5005/events/new-schedule",
+      { ...scheduleForm, eventid: eventId },
+      "Schedule created"
+    );
+  };
+
+  const handleTeamCreate = (e) => {
+    e.preventDefault();
+    postAction(
+      "http://localhost:5005/events/new-team",
+      { teamname: teamForm.teamname, eventid: eventId },
+      "Team created"
+    );
+    setTeamForm({ teamname: "" });
+  };
+
+  const sendJoinRequest = (teamId) => {
+    postAction(
+      "http://localhost:5005/events/team/join-request",
+      { teamid: teamId },
+      "Join request sent!"
+    );
+  };
+
+  const approveRequest = (teamId, userId) => {
+    postAction(
+      "http://localhost:5005/events/team/approve-request",
+      { teamid: teamId, userid: userId },
+      "User added to team"
+    );
+  };
+
+  const handlePromote = (e) => {
+    e.preventDefault();
+    postAction(
+      "http://localhost:5005/events/promote",
+      { ...promoteForm, eventid: eventId },
+      "User promoted"
+    );
+  };
+
+  const handleUpdate = (e) => {
+    e.preventDefault();
+    postAction(
+      "http://localhost:5005/events/updates",
+      { eventid: eventId, message: updateMsg },
+      "Update posted"
+    );
+    setUpdateMsg("");
+  };
+
+  const handleMatch = (e) => {
+    e.preventDefault();
+    postAction(
+      "http://localhost:5005/events/match/create",
+      { ...matchForm, eventid: eventId },
+      "Match created"
+    );
+  };
+
+  // -----------------------------------------------------
+  // UI UTIL CLASSES
+  // -----------------------------------------------------
+  const card =
+    "bg-slate-800/50 border border-slate-700 shadow-lg rounded-xl p-5";
+  const input =
+    "w-full px-3 py-2 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 focus:outline-none";
+
+  // -----------------------------------------------------
+  // LOADING STATE
+  // -----------------------------------------------------
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-300">
+        Loading event...
+      </div>
+    );
+
+  // -----------------------------------------------------
+  // MAIN UI
+  // -----------------------------------------------------
+  return (
+    <div className="min-h-screen bg-slate-900 p-6 text-white">
+      <div className="max-w-6xl mx-auto space-y-6">
+
+        {/* HEADER */}
+        <div>
+          <h1 className="text-3xl font-bold">{event?.name}</h1>
+          <p className="text-slate-400 text-sm">Event ID: {event?._id}</p>
+          <p className="text-xs text-blue-400 mt-1">Role: {role}</p>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-6">
+
+          {/* ---------------- SCHEDULES ---------------- */}
+          <div className={`${card} lg:col-span-2`}>
+            <h2 className="text-xl font-semibold mb-4">Schedules</h2>
+
+            <div className="space-y-3 mb-4">
+              {event.schedule.length === 0 ? (
+                <p className="text-slate-400 text-sm">No schedules yet.</p>
+              ) : (
+                event.schedule.map((s) => (
+                  <div
+                    key={s._id}
+                    className="p-3 bg-slate-700/50 rounded-lg border border-slate-600"
+                  >
+                    <div className="font-medium">{s.title}</div>
+                    <div className="text-xs text-slate-400">
+                      {s.date} • {s.time}
+                    </div>
+                    <div className="text-xs text-slate-400">{s.location}</div>
+                    {s.description && (
+                      <div className="text-sm text-slate-300 mt-1">
+                        {s.description}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Admin-only create schedule */}
+            {role !== "participant" && (
+              <form onSubmit={handleSchedule} className="space-y-3">
+                <input
+                  className={input}
+                  placeholder="Title"
+                  onChange={(e) =>
+                    setScheduleForm({ ...scheduleForm, title: e.target.value })
+                  }
+                />
+                <div className="flex gap-3">
+                  <input
+                    type="date"
+                    className={input}
+                    onChange={(e) =>
+                      setScheduleForm({ ...scheduleForm, date: e.target.value })
+                    }
+                  />
+                  <input
+                    type="time"
+                    className={input}
+                    onChange={(e) =>
+                      setScheduleForm({ ...scheduleForm, time: e.target.value })
+                    }
+                  />
+                </div>
+                <input
+                  className={input}
+                  placeholder="Location"
+                  onChange={(e) =>
+                    setScheduleForm({
+                      ...scheduleForm,
+                      location: e.target.value,
+                    })
+                  }
+                />
+                <textarea
+                  className={input}
+                  placeholder="Description"
+                  onChange={(e) =>
+                    setScheduleForm({
+                      ...scheduleForm,
+                      description: e.target.value,
+                    })
+                  }
+                />
+                <button className="px-4 py-2 bg-blue-600 rounded-lg">
+                  Create Schedule
+                </button>
+              </form>
+            )}
+          </div>
+
+          {/* ---------------- TEAMS ---------------- */}
+          <div className={card}>
+            <h2 className="text-xl font-semibold mb-4">Teams</h2>
+
+            {event.teams.length === 0 ? (
+              <p className="text-slate-400 text-sm">No teams yet.</p>
+            ) : (
+              event.teams.map((t) => {
+                const isLeader = t.leader?._id === currentUser;
+                const isMember = t.members.includes(currentUser);
+
+                return (
+                  <div
+                    key={t._id}
+                    className="p-3 bg-slate-700/40 rounded-lg border border-slate-600 mb-3"
+                  >
+                    <div className="font-medium">{t.teamname}</div>
+                    <div className="text-xs text-slate-400">
+                      Leader: {t.leader?.name}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      Members: {t.members.length}
+                    </div>
+
+                    {/* REQUEST TO JOIN */}
+                    {!isLeader && !isMember && (
+                      <button
+                        className="px-2 py-1 mt-2 bg-blue-600 text-xs rounded"
+                        onClick={() => sendJoinRequest(t._id)}
+                      >
+                        Request to Join
+                      </button>
+                    )}
+
+                    {/* APPROVAL PANEL FOR LEADER */}
+                    {isLeader && (
+                      <div className="mt-3 bg-slate-800/50 p-2 rounded border border-slate-700">
+                        <div className="text-xs mb-2">Join Requests:</div>
+
+                        {t.requests.length === 0 ? (
+                          <div className="text-xs text-slate-500">
+                            No pending requests
+                          </div>
+                        ) : (
+                          t.requests.map((req) => (
+                            <div
+                              key={req.user._id}
+                              className="flex justify-between items-center text-xs mb-1"
+                            >
+                              <span>{req.user.name}</span>
+                              <button
+                                className="px-2 py-1 bg-emerald-600 rounded"
+                                onClick={() => approveRequest(t._id, req.user._id)}
+                              >
+                                Approve
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+
+            {/* CREATE TEAM (always visible) */}
+            <form onSubmit={handleTeamCreate} className="flex gap-2 mt-4">
+              <input
+                className={input}
+                placeholder="Team name"
+                value={teamForm.teamname}
+                onChange={(e) =>
+                  setTeamForm({ teamname: e.target.value })
+                }
+              />
+              <button className="px-3 bg-rose-600 rounded-lg">Create</button>
+            </form>
+          </div>
+        </div>
+
+        {/* ---------------- ADMIN PANEL ---------------- */}
+        {role !== "participant" && (
+          <div className="grid lg:grid-cols-3 gap-6">
+
+            {/* Promote */}
+            <div className={card}>
+              <h3 className="font-semibold mb-2">Promote User</h3>
+              <form onSubmit={handlePromote} className="space-y-2">
+                <input
+                  className={input}
+                  placeholder="User ID"
+                  value={promoteForm.userid}
+                  onChange={(e) =>
+                    setPromoteForm({ ...promoteForm, userid: e.target.value })
+                  }
+                />
+                <select
+                  className={input}
+                  value={promoteForm.post}
+                  onChange={(e) =>
+                    setPromoteForm({ ...promoteForm, post: e.target.value })
+                  }
+                >
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <button className="px-3 py-2 bg-blue-600 rounded-lg w-full">
+                  Promote
+                </button>
+              </form>
+            </div>
+
+            {/* Updates */}
+            <div className={card}>
+              <h3 className="font-semibold mb-2">Post Update</h3>
+              <form onSubmit={handleUpdate} className="space-y-2">
+                <textarea
+                  className={input}
+                  placeholder="Write update..."
+                  value={updateMsg}
+                  onChange={(e) => setUpdateMsg(e.target.value)}
+                />
+                <button className="px-3 py-2 bg-emerald-600 rounded-lg w-full">
+                  Post Update
+                </button>
+              </form>
+            </div>
+
+            {/* Create Match */}
+            <div className={card}>
+              <h3 className="font-semibold mb-2">Create Match</h3>
+              <form onSubmit={handleMatch} className="space-y-2">
+                <select
+                  className={input}
+                  value={matchForm.scheduleid}
+                  onChange={(e) =>
+                    setMatchForm({ ...matchForm, scheduleid: e.target.value })
+                  }
+                >
+                  <option value="">Select schedule</option>
+                  {event.schedule.map((s) => (
+                    <option key={s._id} value={s._id}>
+                      {s.title} — {s.date}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className={input}
+                  value={matchForm.teamA}
+                  onChange={(e) =>
+                    setMatchForm({ ...matchForm, teamA: e.target.value })
+                  }
+                >
+                  <option value="">Team A</option>
+                  {event.teams.map((t) => (
+                    <option key={t._id} value={t._id}>
+                      {t.teamname}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className={input}
+                  value={matchForm.teamB}
+                  onChange={(e) =>
+                    setMatchForm({ ...matchForm, teamB: e.target.value })
+                  }
+                >
+                  <option value="">Team B</option>
+                  {event.teams.map((t) => (
+                    <option key={t._id} value={t._id}>
+                      {t.teamname}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  className={input}
+                  placeholder="Match time"
+                  value={matchForm.time}
+                  onChange={(e) =>
+                    setMatchForm({ ...matchForm, time: e.target.value })
+                  }
+                />
+
+                <button className="px-3 py-2 bg-rose-600 rounded-lg w-full">
+                  Create Match
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- UPDATES ---------------- */}
+        <div className={card}>
+          <h2 className="text-xl font-semibold mb-3">Updates</h2>
+          <div className="space-y-3">
+            {event.updates
+              .slice()
+              .reverse()
+              .map((u) => (
+                <div
+                  key={u._id}
+                  className="p-3 bg-slate-700/40 rounded border border-slate-600"
+                >
+                  <div className="text-xs text-slate-400">
+                    {new Date(u.createdAt).toLocaleString()}
+                  </div>
+                  <div className="text-slate-200 mt-1">{u.message}</div>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        {/* Global message */}
+        {message && (
+          <div className="p-3 rounded bg-slate-700 text-center">{message}</div>
+        )}
+      </div>
+    </div>
+  );
+}

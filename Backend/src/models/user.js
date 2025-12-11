@@ -8,6 +8,12 @@ const userSchema=new mongoose.Schema({
   events:[{type:mongoose.Schema.Types.ObjectId,ref:"Event",default:[]}],
   clubs:[{type:mongoose.Schema.Types.ObjectId,ref:"Club",default:[]}],
   currentRefreshToken:{type:String,default:null},
+  notifications: [
+  {
+    message: String,
+    createdAt: { type: Date, default: Date.now }
+  }
+],
 },{timestamps:true});
 
 const userModel=mongoose.model("User",userSchema);

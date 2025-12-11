@@ -317,7 +317,7 @@ navigate("/login");
                           ID: {t._id}
                         </div>
                       </div>
-                      <button className="text-xs px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100">
+                      <button onClick={() => navigate(`/events/${t._id}`)} className="text-xs px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100">
                         View
                       </button>
                     </div>
