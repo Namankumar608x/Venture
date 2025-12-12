@@ -15,19 +15,11 @@ const eventSchema=new mongoose.Schema({
             createdAt: { type: Date, default: Date.now }
         }
     ],
-    // Match/round scheduling
-   schedule: [
-  {
-    _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+     minPlayer:{type:Number,default:1}, 
+    maxPlayer:{type:Number,required:true},
 
-    title: String,
-    date: Date,
-    time: String,
-    location: String,
-    description: String
-  }
-],
-     teams:[{type:mongoose.Schema.Types.ObjectId,ref:"Team"}],
+     teams:[{type:mongoose.Schema.Types.ObjectId,ref:"Team",
+    }],
         qualifiedPlayers: [
         {
             user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

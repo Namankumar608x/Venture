@@ -6,6 +6,7 @@ import authenticate from "../middlewares/auth.js";
 import Match from "../models/matches.js";
 import mongoose from "mongoose";
 import Team from "../models/team.js";
+import Schedule from "../models/schedule.js";
 import {checkadmin,checkmanager} from "../middlewares/roles.js";
 const router=express.Router();
 const checkEvent = async (eventId) => {
@@ -14,14 +15,14 @@ const checkEvent = async (eventId) => {
 
 router.post("/new",authenticate,async(req,res)=>{
 const userid=req.user.id;
-const {clubid,eventname}=req.body;
+const {clubid,name,description,maxPlayer}=req.body;
 try {
     const check=await Club.findById(clubid);//club exist karta hai ya nahi
 if(!check){
     return res.status(404).json({message:"No club found!"});
 }
 if (check.admin.toString()===userid || check.managers.map(id=>id.toString()).includes(userid)){
-    const event=new Event({name: eventname,admin:[userid],club:clubid});
+    const event=new Event({name,admin:[userid],club:clubid,description,maxPlayer});
     const newevent=await event.save();
     check.events.push(newevent._id);
     const user=await User.findById(userid);
@@ -275,7 +276,8 @@ router.get("/:eventId/schedules", authenticate, async (req, res) => {
 
     if (!event) return res.status(404).json({ message: "Event not found" });
 
-    return res.status(200).json({ schedules: event.schedule });
+    const schedules=await Schedule.find({eventid:eventId});
+    return res.status(200).json(schedules);
   } catch (error) {
     console.error("GET /events/:eventId/schedules", error);
     return res.status(500).json({ message: "Server error" });
@@ -301,29 +303,7 @@ router.get("/:eventId/schedules", authenticate, async (req, res) => {
   }
 });
 
-router.get("/:eventId", authenticate, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const event = await Event.findById(req.params.eventId)
-      .populate("teams")
-      .populate("schedule");
 
-    if (!event) return res.status(404).json({ message: "Event not found" });
-
-    // Check roles
-    let isAdmin = event.admin?.map(id => id.toString()).includes(userId);
-
-let isManager = event.managers?.map(id => id.toString()).includes(userId);
-
-
-    res.json({
-      event,
-      role: isAdmin ? "admin" : isManager ? "manager" : "participant"
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-});
 
 router.get("/roles/:eventid", authenticate, async (req, res) => {
   try {
@@ -338,6 +318,28 @@ router.get("/roles/:eventid", authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+router.get("/:eventId", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const event = await Event.findById(req.params.eventId)
+      .populate("teams")
+
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    // Check roles
+    let isAdmin = event.admin?.map(id => id.toString()).includes(userId);
+
+let isManager = event.managers?.map(id => id.toString()).includes(userId);
+
+
+    res.json({
+      event,
+      role: isAdmin ? "admin" : isManager ? "manager" : "participant"
+    });
+  } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 });

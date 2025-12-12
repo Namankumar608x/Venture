@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 
 const teamSchema = new mongoose.Schema({
   teamname: { type: String, required: true },
-
   leader: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",

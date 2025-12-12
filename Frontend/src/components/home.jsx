@@ -18,9 +18,32 @@ function Home(){
   const token = localStorage.getItem("accessToken");
   if (token) setlogin(true);
 }, []);
- 
-   const getAuthConfig=()=>{
-    const token=localStorage.getItem("accessToken");
+ const refreshAccessToken =async ()=> { 
+    try {
+      const refreshToken = localStorage.getItem("refreshToken");
+      if (!refreshToken) return null;
+
+      const response = await fetch("http://localhost:5005/auth/refresh", { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        console.warn("Failed to refresh access token");
+        return null;
+      }
+
+      const data = await response.json();
+      localStorage.setItem("accessToken", data.accessToken);
+      return data.accessToken;
+    } catch (err) {
+      console.error("Error refreshing token:", err);
+      return null;
+    }
+  };  
+   const getAuthConfig=async()=>{
+    let token=localStorage.getItem("accessToken");
     console.log("[getAuthConfig] token:", token);
     if(!token){
       setMessage("Please login again, session expired.");
@@ -29,9 +52,16 @@ function Home(){
     try{
       const payload = jwtDecode(token);
       if(payload.exp && Date.now()/1000 > payload.exp){
-        localStorage.removeItem("accessToken");
-        setMessage("Please login again, session expired.");
-        return null;
+        const newToken = await refreshAccessToken();
+        if(!newToken){
+
+         localStorage.removeItem("accessToken");
+      setMessage("Please login again, session expired.");
+        }
+        else{
+          token=newToken;
+          localStorage.setItem("accessToken",token);
+        }
       }
     }catch(e){
       console.warn("[getAuthConfig] jwt decode failed", e);

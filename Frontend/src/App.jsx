@@ -29,7 +29,7 @@ export default function App() {
 
         {/* Protected Routes (Inbox visible here via Layout) */}
         <Route
-          path="/home"
+          path="/"
           element={
             <ProtectedRoute>
               <Layout>

@@ -2,21 +2,26 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import {jwtDecode} from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 import EventCard from "./EventCard";
 
 function EventsDashboard() {
   const [myAdminClubs, setMyAdminClubs] = useState([]);
   const [participantClubs, setParticipantClubs] = useState([]);
   const [selectedClub, setSelectedClub] = useState("");
-  const [eventName, setEventName] = useState("");
+  const [event, setEvent] = useState({
+    name: "",
+    description: "",
+    maxPlayer: "",
+  });
   const [message, setMessage] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
-    if (token) axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    if (token)
+      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     fetchClubs();
   }, []);
 
@@ -73,7 +78,7 @@ function EventsDashboard() {
       setMessage("Select a club (tournament) to create the event under.");
       return;
     }
-    if (!eventName.trim()) {
+    if (!event.name.trim()) {
       setMessage("Event name required.");
       return;
     }
@@ -84,11 +89,11 @@ function EventsDashboard() {
       if (!config) return;
       const res = await axios.post(
         "http://localhost:5005/events/new",
-        { clubid: selectedClub, eventname: eventName.trim() },
+        { clubid: selectedClub, ...event },
         config
       );
       setMessage(res.data?.message || "Event created");
-      setEventName("");
+      setEvent("");
       // navigate to the new event page if eventId returned
       if (res.data?.eventId) navigate(`/events/${res.data.eventId}`);
     } catch (err) {
@@ -99,21 +104,23 @@ function EventsDashboard() {
     }
   };
 
-const fetchEventsForClub = async (clubId) => {
-  try {
-    const config = getAuthConfig();
-    if (!config) return [];
+  const fetchEventsForClub = async (clubId) => {
+    try {
+      const config = getAuthConfig();
+      if (!config) return [];
 
-    const res = await axios.get(`http://localhost:5005/events/club/${clubId}`, config);
+      const res = await axios.get(
+        `http://localhost:5005/events/club/${clubId}`,
+        config
+      );
 
-    return res.data.events || [];   // return the array
-  } catch (err) {
-    console.error("fetchEventsForClub error", err);
-    setMessage(err.response?.data?.message || "Failed to load events");
-    return [];
-  }
-};
-
+      return res.data.events || []; // return the array
+    } catch (err) {
+      console.error("fetchEventsForClub error", err);
+      setMessage(err.response?.data?.message || "Failed to load events");
+      return [];
+    }
+  };
 
   // quick preview state for events under selected club
   const [clubEvents, setClubEvents] = useState([]);
@@ -143,7 +150,9 @@ const fetchEventsForClub = async (clubId) => {
         <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 p-6 md:p-8">
           <div className="grid md:grid-cols-2 gap-8">
             <div>
-              <h2 className="text-xl font-semibold text-white mb-2">Create Event</h2>
+              <h2 className="text-xl font-semibold text-white mb-2">
+                Create Event
+              </h2>
               <p className="text-slate-400 text-sm mb-4">
                 Select club (tournament) and create an event inside it.
               </p>
@@ -157,16 +166,34 @@ const fetchEventsForClub = async (clubId) => {
                   <option value="">Select a club (tournament)</option>
                   {myAdminClubs.map((c) => (
                     <option key={c._id || c.id} value={c._id || c.id}>
-                      {c.name || `Club ${c._id || c.id}`} 
+                      {c.name || `Club ${c._id || c.id}`}
                     </option>
                   ))}
                 </select>
 
                 <input
                   type="text"
-                  value={eventName}
-                  onChange={(e) => setEventName(e.target.value)}
-                  placeholder="Event name (e.g. Football Cup 2025)"
+                  value={event.name}
+                  onChange={(e) => setEvent({ ...event, name: e.target.value })}
+                  placeholder="Event name(e.g. Football Club 2026)"
+                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                <input
+                  type="text"
+                  value={event.description}
+                  onChange={(e) =>
+                    setEvent({ ...event, description: e.target.value })
+                  }
+                  placeholder="Event description"
+                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                <input
+                  type="number"
+                  value={event.maxPlayer}
+                  onChange={(e) =>
+                    setEvent({ ...event, maxPlayer: e.target.value })
+                  }
+                  placeholder="Max players in a team"
                   className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
 
@@ -181,9 +208,12 @@ const fetchEventsForClub = async (clubId) => {
             </div>
 
             <div>
-              <h2 className="text-xl font-semibold text-white mb-2">Quick Actions</h2>
+              <h2 className="text-xl font-semibold text-white mb-2">
+                Quick Actions
+              </h2>
               <p className="text-slate-400 text-sm mb-4">
-                Use the event list below to open event dashboard, or paste an event ID to open.
+                Use the event list below to open event dashboard, or paste an
+                event ID to open.
               </p>
 
               <div className="space-y-3">
@@ -196,7 +226,9 @@ const fetchEventsForClub = async (clubId) => {
                   />
                   <button
                     onClick={() => {
-                      const val = document.getElementById("openEventId").value.trim();
+                      const val = document
+                        .getElementById("openEventId")
+                        .value.trim();
                       if (val) navigate(`/events/${val}`);
                     }}
                     className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 text-sm border border-slate-700 hover:bg-slate-700 transition"
@@ -206,16 +238,24 @@ const fetchEventsForClub = async (clubId) => {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold text-white mb-2">Selected Club Events</h3>
+                  <h3 className="text-lg font-semibold text-white mb-2">
+                    Selected Club Events
+                  </h3>
                   {clubEvents.length === 0 ? (
-                    <p className="text-slate-500 text-sm">No events for this club yet.</p>
+                    <p className="text-slate-500 text-sm">
+                      No events for this club yet.
+                    </p>
                   ) : (
                     <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
                       {clubEvents.map((ev) => (
                         <EventCard
                           key={ev._id || ev.id}
                           event={ev}
-                          onOpen={() => navigate(`/events/${selectedClub}/${ev._id || ev.id}`)}
+                          onOpen={() =>
+                            navigate(
+                              `/events/${selectedClub}/${ev._id || ev.id}`
+                            )
+                          }
                         />
                       ))}
                     </div>
@@ -235,9 +275,13 @@ const fetchEventsForClub = async (clubId) => {
 
           <div className="mt-8 grid md:grid-cols-2 gap-6">
             <div>
-              <h3 className="text-lg font-semibold text-white mb-2">Your Clubs (Admin)</h3>
+              <h3 className="text-lg font-semibold text-white mb-2">
+                Your Clubs (Admin)
+              </h3>
               {myAdminClubs.length === 0 ? (
-                <p className="text-slate-500 text-sm">You don't admin any clubs yet.</p>
+                <p className="text-slate-500 text-sm">
+                  You don't admin any clubs yet.
+                </p>
               ) : (
                 <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
                   {myAdminClubs.map((c) => (
@@ -246,8 +290,12 @@ const fetchEventsForClub = async (clubId) => {
                       className="bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3 flex justify-between items-center text-sm text-slate-100"
                     >
                       <div>
-                        <div className="font-medium">{c.name || "Unnamed Club"}</div>
-                        <div className="text-xs text-slate-400">ID: {c._id || c.id}</div>
+                        <div className="font-medium">
+                          {c.name || "Unnamed Club"}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          ID: {c._id || c.id}
+                        </div>
                       </div>
                       <button
                         onClick={() => setSelectedClub(c._id || c.id)}
@@ -262,9 +310,13 @@ const fetchEventsForClub = async (clubId) => {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-white mb-2">Clubs You Joined</h3>
+              <h3 className="text-lg font-semibold text-white mb-2">
+                Clubs You Joined
+              </h3>
               {participantClubs.length === 0 ? (
-                <p className="text-slate-500 text-sm">You haven't joined any clubs yet.</p>
+                <p className="text-slate-500 text-sm">
+                  You haven't joined any clubs yet.
+                </p>
               ) : (
                 <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
                   {participantClubs.map((c) => (
@@ -273,8 +325,12 @@ const fetchEventsForClub = async (clubId) => {
                       className="bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3 flex justify-between items-center text-sm text-slate-100"
                     >
                       <div>
-                        <div className="font-medium">{c.name || "Unnamed Club"}</div>
-                        <div className="text-xs text-slate-400">ID: {c._id || c.id}</div>
+                        <div className="font-medium">
+                          {c.name || "Unnamed Club"}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          ID: {c._id || c.id}
+                        </div>
                       </div>
                       <button
                         onClick={() => setSelectedClub(c._id || c.id)}
