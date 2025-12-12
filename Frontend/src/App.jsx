@@ -9,7 +9,7 @@ import EventPage from "./components/eventpage";
 import Schedule from "./components/schedule";
 import Layout from "./components/Layout";
 import ClubChat from "./components/ClubChat";
-
+import EventQueries from "./components/EventQueries";
 // ---------- PROTECTED ROUTE with debug ----------
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("accessToken");
@@ -140,6 +140,22 @@ export default function App() {
           }
         />
       </Routes>
+      // Insert into your Routes list in App.jsx (Protected Routes section)
+<Route
+  path="/events/:clubid/:eventId/query"
+  element={
+    <ProtectedRoute>
+      <>
+        {console.log("Route: /events/:clubid/:eventId/query")}
+        <Layout>
+          <EventQueries />
+        </Layout>
+      </>
+    </ProtectedRoute>
+  }
+/>
+
     </>
+
   );
 }
