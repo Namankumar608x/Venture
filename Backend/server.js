@@ -54,6 +54,9 @@ const io = new IOServer(httpServer, {
   },
 });
 
+// Make io available to REST route handlers via req.app.locals.io
+app.locals.io = io;
+
 setupSocket(io);
 
 httpServer.listen(PORT, () => {

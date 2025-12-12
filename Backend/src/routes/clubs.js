@@ -3,6 +3,7 @@ import express from "express";
 import Club from "../models/club.js";
 import User from "../models/user.js";
 import auth from "../middlewares/auth.js";
+import ChatMessage from "../models/ChatMessage.js";
 
 const router=express.Router();
 
@@ -75,6 +76,72 @@ router.get("/participant",auth,async(req,res)=>{
   }catch(err){
     console.error(err);
     return res.status(500).json({error:"Server error while fetching my tournaments"});
+  }
+});
+// GET /club/:clubId/chat  -> fetch club announcements/messages (paginated)
+router.get("/:clubId/chat", auth, async (req, res) => {
+  try {
+    const { clubId } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    const messages = await ChatMessage.find({ clubId })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("sender", "username name")
+      .lean();
+
+    return res.json({ success: true, data: messages.reverse(), page, limit });
+  } catch (err) {
+    console.error("GET /club/:clubId/chat error:", err);
+    return res.status(500).json({ success: false, error: "Server error" });
+  }
+});
+
+// POST /club/:clubId/chat  -> create announcement (only club admins)
+router.post("/:clubId/chat", auth, async (req, res) => {
+  try {
+    const { clubId } = req.params;
+    const { message } = req.body;
+    const userId = req.user && (req.user.id || req.user._id);
+
+    if (!message || !message.trim()) return res.status(400).json({ success: false, error: "Message required" });
+
+    const club = await Club.findById(clubId);
+    if (!club) return res.status(404).json({ success: false, error: "Club not found" });
+
+    // check club admin membership (club.admin may be id or array)
+    const isClubAdmin = Array.isArray(club.admin) ? club.admin.some(id => id.toString() === userId) : club.admin && club.admin.toString() === userId;
+    if (!isClubAdmin) return res.status(403).json({ success: false, error: "Only club admins can post announcements" });
+
+    const chat = new ChatMessage({
+      text: message.trim(),
+      clubId,
+      sender: userId,
+      senderRole: "club-admin"
+    });
+    const saved = await chat.save();
+    const populated = await ChatMessage.findById(saved._id).populate("sender", "username name").lean();
+
+    // Emit via socket if available
+    const io = req.app?.locals?.io;
+    const payload = {
+      _id: populated._id,
+      clubId: populated.clubId,
+      text: populated.text,
+      message: populated.text,
+      sender: populated.sender,
+      senderRole: populated.senderRole,
+      createdAt: populated.createdAt
+    };
+    if (io) io.to(`club:${clubId}`).emit("chat:new:club", payload);
+
+    return res.json({ success: true, data: payload });
+  } catch (err) {
+    console.error("POST /club/:clubId/chat error:", err);
+    return res.status(500).json({ success: false, error: "Server error" });
   }
 });
 

@@ -5,7 +5,9 @@ import Event from "../models/events.js";
 import authenticate from "../middlewares/auth.js";
 import Match from "../models/matches.js";
 import Team from "../models/team.js";
+import mongoose from "mongoose";
 
+import ChatMessage from "../models/ChatMessage.js";
 import {checkadmin,checkmanager} from "../middlewares/roles.js";
 
 const checkEvent = async (eventId) => {
@@ -103,8 +105,8 @@ try {
         })
         await event.save();
         return res.status(200).json({message:"Message emitted sucessfully"});
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -122,7 +124,7 @@ return res.status(200).json({
     message:`New schedule for ${event.name} created `
 });
     } catch (error) {
-    console.error(err);
+    console.error(error);
     res.status(500).json({ message: "Server error" });
     }
 
@@ -145,7 +147,7 @@ await user.save();
 return res.status(200).json({message:"player added"});
 
   } catch (error) {
-    console.error(err);
+    console.error(error);
     res.status(500).json({ message: "Server error" });
   }
 
@@ -169,7 +171,7 @@ event.teams.push(fteam._id);
 await event.save();
 return res.status(200).json({message:"new team created"});
   } catch (error) {
-      console.error(err);
+      console.error(error);
     res.status(500).json({ message: "Server error" });
   }
 
@@ -194,7 +196,7 @@ if (!event.players.map(id => id.toString()).includes(userid.toString()))
   await team.save();
   return res.status(200).json({message:"new member added to team"});
 } catch (error) {
-      console.error(err);
+      console.error(error);
     res.status(500).json({ message: "Server error" });
 }
 });
@@ -224,8 +226,164 @@ if (!schedule) return res.status(400).json({ message: "Schedule not part of even
 
   res.json({ message: "Match created", match });
 });
+router.get("/:eventId/chat", authenticate, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit || "50", 10), 200);
+    const page = Math.max(parseInt(req.query.page || "1", 10), 1);
+
+    const skip = (page - 1) * limit;
+
+    const messages = await ChatMessage.find({ event: eventId })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("sender", "username name");
+
+    // send in chronological order (oldest first)
+    return res.json({
+      success: true,
+      data: messages.reverse(),
+      page,
+      limit,
+    });
+  } catch (error) {
+    console.error("GET /event/:id/chat error:", error);
+    return res.status(500).json({ success: false, error: "Server error" });
+  }
+});
+
+/**
+ * POST /event/:eventId/chat
+ * Create an announcement (ONLY event admins OR club admins)
+ * Body: { message: "..." }
+ */
+// POST /:eventId/chat — create announcement (event admin OR club admin)
+router.post("/:eventId/chat", authenticate, async (req, res) => {
+  const { eventId } = req.params;
+  const { message } = req.body;
+  const userId = req.user && (req.user.id || req.user._id);
+
+  try {
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, error: "Message required" });
+    }
+
+    // Debug log
+    console.log("CHAT POST called for eventId:", eventId, "by user:", userId);
+
+    const event = await Event.findById(eventId);
+    if (!event) {
+      console.warn("CHAT POST: event not found:", eventId);
+      return res.status(404).json({ success: false, error: "Event not found" });
+    }
+
+    // Check event admin
+    const isEventAdmin = Array.isArray(event.admin)
+      ? event.admin.some((id) => id.toString() === userId?.toString())
+      : event.admin?.toString() === userId?.toString();
+
+    // Check club admin (if event has club)
+    let isClubAdmin = false;
+    if (event.club) {
+      const club = await Club.findById(event.club);
+      if (club && club.admin) {
+        isClubAdmin = club.admin.toString() === userId?.toString();
+      }
+    }
+
+    if (!isEventAdmin && !isClubAdmin) {
+      console.warn("CHAT POST: unauthorized user:", userId, "isEventAdmin:", isEventAdmin, "isClubAdmin:", isClubAdmin);
+      return res.status(403).json({ success: false, error: "Only event or club admins can post announcements" });
+    }
+
+    const chat = new ChatMessage({
+      event: eventId,
+      sender: userId,
+      message: message.trim(),
+    });
+
+    const saved = await chat.save();
+
+    // Populate robustly (avoid execPopulate issues)
+    const populated = await ChatMessage.findById(saved._id).populate("sender", "username name").lean();
+
+    // Emit to socket room, if io available
+    try {
+      const io = req.app?.locals?.io;
+      if (io) {
+        io.to(`event:${eventId}`).emit("chat:new", populated);
+        console.log("EMIT chat:new to room:", `event:${eventId}`, "payload id:", populated?._id);
+      } else {
+        console.warn("EMIT skipped: io not found on req.app.locals.io");
+      }
+    } catch (emitErr) {
+      console.error("EMIT ERROR:", emitErr);
+    }
+
+    return res.json({ success: true, data: populated });
+  } catch (err) {
+    // Detailed error logging for debugging
+    console.error("ERROR in POST /event/:eventId/chat:", err, err.stack);
+    return res.status(500).json({ success: false, error: "Server error" });
+  }
+});
 
 
+/**
+ * PUT /event/:eventId/score
+ * Admin/Manager updates score for a match
+ * Body: { matchId, scoreA, scoreB }
+ */
+router.put("/:eventId/score", authenticate, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { matchId, scoreA, scoreB } = req.body;
+    const userId = req.user && req.user.id ? req.user.id : req.user._id;
 
+    if (!matchId) return res.status(400).json({ success: false, error: "matchId required" });
+
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).json({ success: false, error: "Event not found" });
+
+    const isAdmin = event.admin && event.admin.some(id => id.toString() === userId.toString());
+    const isManager = event.managers && event.managers.some(id => id.toString() === userId.toString());
+
+    if (!isAdmin && !isManager) {
+      return res.status(403).json({ success: false, error: "Only event admins or managers can update scores" });
+    }
+
+    const match = await Match.findById(matchId);
+    if (!match) return res.status(404).json({ success: false, error: "Match not found" });
+
+    // Update scores — adapt field names to your Match model
+    match.scoreA = typeof scoreA !== "undefined" ? scoreA : match.scoreA;
+    match.scoreB = typeof scoreB !== "undefined" ? scoreB : match.scoreB;
+    match.lastUpdatedBy = userId;
+    match.updatedAt = new Date();
+
+    const saved = await match.save();
+
+    // Emit via socket to event room
+    try {
+      const io = req.app.locals.io;
+      if (io) {
+        io.to(`event:${eventId}`).emit("score:updated", {
+          matchId: saved._id,
+          scoreA: saved.scoreA,
+          scoreB: saved.scoreB,
+          updatedAt: saved.updatedAt || new Date(),
+        });
+      }
+    } catch (emitErr) {
+      console.warn("Failed to emit score:updated", emitErr);
+    }
+
+    return res.json({ success: true, data: saved });
+  } catch (err) {
+    console.error("PUT /event/:id/score error:", err);
+    return res.status(500).json({ success: false, error: "Server error" });
+  }
+});
 
 export default router;
