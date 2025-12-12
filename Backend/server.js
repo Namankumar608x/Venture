@@ -5,12 +5,13 @@ import mongo from "./src/db/mongo.js";
 import http from "http";
 import { Server as IOServer } from "socket.io";
 import setupSocket from "./src/sockets/index.js";
-
+import notifications from "./src/routes/notification.js";
 import home from "./src/routes/home.js";
 import auth from "./src/routes/auth.js";
 import club from "./src/routes/clubs.js";
 import event from "./src/routes/event.js";
-
+import teams from "./src/routes/team.js";
+import schedule from "./src/routes/schedule.js";
 dotenv.config();
 
 const app = express();
@@ -43,8 +44,10 @@ mongo();
 app.use("/", home);
 app.use("/auth", auth);
 app.use("/clubs", club);
-app.use("/event", event);
-
+app.use("/events", event);
+app.use("/teams",teams);
+app.use("/schedule", schedule);
+app.use("/notifications", notifications);
 const httpServer = http.createServer(app);
 
 const io = new IOServer(httpServer, {

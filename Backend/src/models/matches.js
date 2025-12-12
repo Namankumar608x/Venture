@@ -5,6 +5,11 @@ eventid: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Event"
   },
+  status: {
+  type: String,
+  enum: ["upcoming", "live", "finished"],
+  default: "upcoming"
+},
 
   teamA: {
     teamId: { type: mongoose.Schema.Types.ObjectId }, 
