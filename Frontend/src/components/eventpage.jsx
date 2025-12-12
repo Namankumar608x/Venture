@@ -651,7 +651,12 @@ useEffect(() => {
         {message && (
           <div className="p-3 rounded bg-slate-700 text-center">{message}</div>
         )}
+        <button onClick={() => navigate(`/events/${clubid}/${eventId}/queries/admin`)}>
+  Manage Queries
+</button>
       </div>
+      
+
     </div>
   );
 }

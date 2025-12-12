@@ -14,11 +14,15 @@ export default function EventQueries() {
   const [sending, setSending] = useState(false);
   const socketRef = useRef(null);
 
+  // backend base (override with VITE_BACKEND_URL if set)
+  const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:5005";
+
   // debug helper
   const log = (...args) => console.log("[EventQueries]", ...args);
 
   useEffect(() => {
     log("mount -> clubid:", clubid, "eventId:", eventId);
+    log("BACKEND:", BACKEND);
 
     const token = localStorage.getItem("accessToken");
     if (!token) {
@@ -30,14 +34,17 @@ export default function EventQueries() {
     // fetch history
     async function loadHistory() {
       try {
-        log("Fetching /events/:eventId/queries");
-        const res = await axios.get(`/events/${eventId}/queries`, {
+        log("Fetching history from", `${BACKEND}/events/${eventId}/queries`);
+        const res = await axios.get(`${BACKEND}/events/${eventId}/queries`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         log("History response:", res?.data);
         setQueries(Array.isArray(res?.data?.data) ? res.data.data : []);
       } catch (err) {
-        console.error("[EventQueries] failed to fetch queries:", err);
+        log("[EventQueries] failed to fetch queries:", err?.message || err);
+        if (err?.response) {
+          console.error("[EventQueries] fetch error response:", err.response.status, err.response.data);
+        }
       } finally {
         setLoading(false);
       }
@@ -46,8 +53,8 @@ export default function EventQueries() {
 
     // connect socket
     try {
-      log("Initializing socket.io client");
-      const s = io("/", {
+      log("Initializing socket.io client to", BACKEND);
+      const s = io(BACKEND, {
         auth: { token },
         transports: ["websocket"],
         path: "/socket.io",
@@ -61,8 +68,7 @@ export default function EventQueries() {
           log("ping:test ack:", resp);
         });
 
-        // join event room if server expects it (some servers use join:event)
-        // This is safe: server will ack or ignore.
+        // join event presence (server may use it)
         s.emit("join:event", { eventId }, (ack) => {
           log("join:event ack:", ack);
         });
@@ -99,10 +105,15 @@ export default function EventQueries() {
         } catch (e) {
           log("leave:event error:", e);
         }
-        socketRef.current.disconnect();
+        try {
+          socketRef.current.disconnect();
+        } catch (e) {
+          log("socket disconnect error:", e);
+        }
         socketRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clubid, eventId, navigate]);
 
   const handleSend = async () => {
@@ -128,16 +139,15 @@ export default function EventQueries() {
           setText("");
         } else {
           console.error("[EventQueries] query:send failed ack:", ack);
-          // fallback: try REST POST if you later implement it on backend
         }
         setSending(false);
       });
     } else {
       // fallback to REST (if your backend provides POST /events/:eventId/queries)
       try {
-        log("Socket not connected - falling back to REST POST");
+        log("Socket not connected - falling back to REST POST to", `${BACKEND}/events/${eventId}/queries`);
         const res = await axios.post(
-          `/events/${eventId}/queries`,
+          `${BACKEND}/events/${eventId}/queries`,
           { message: text },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -145,9 +155,14 @@ export default function EventQueries() {
         if (res?.data?.data) {
           setQueries((prev) => [...prev, res.data.data]);
           setText("");
+        } else {
+          console.warn("[EventQueries] POST returned unexpected response", res);
         }
       } catch (err) {
-        console.error("[EventQueries] REST POST fallback failed:", err);
+        console.error("[EventQueries] REST POST fallback failed:", err?.message || err);
+        if (err?.response) {
+          console.error("[EventQueries] REST POST response:", err.response.status, err.response.data);
+        }
       } finally {
         setSending(false);
       }
@@ -191,7 +206,7 @@ export default function EventQueries() {
                 padding: 8,
                 marginBottom: 8,
                 borderRadius: 6,
-                background: q.sender?.username ? "#fff" : "#fff",
+                background: "#fff",
                 boxShadow: "0 0 0 1px rgba(0,0,0,0.02)",
               }}
             >

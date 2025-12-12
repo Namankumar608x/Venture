@@ -7,6 +7,7 @@ import Event from "../models/events.js";
 import Club from "../models/club.js";
 import ChatMessage from "../models/ChatMessage.js";
 import User from "../models/user.js";
+import QueryMessage from "../models/QueryMessage.js"; // NEW: model for private queries
 
 const JWT_SECRET = process.env.ACCESS_SECRET || process.env.JWT_SECRET || "ava";
 
@@ -63,7 +64,40 @@ export default function setupSocket(io) {
     }
 
     // -------------------
+    // Join personal & organizer rooms (if authenticated)
+    // -------------------
+    try {
+      if (socket.user && (socket.user._id || socket.user.id)) {
+        const uid = (socket.user._id || socket.user.id).toString();
+        const personalRoom = `user:${uid}`;
+        socket.join(personalRoom);
+        console.log(`🔐 Joined personal room: ${personalRoom} for socket ${socket.id}`);
+
+        // Try to find events this user is admin of, and join organizer rooms
+        try {
+          const adminEvents = await Event.find({ admin: uid }).select("_id").lean();
+          if (Array.isArray(adminEvents) && adminEvents.length > 0) {
+            adminEvents.forEach((ev) => {
+              const orgRoom = `event-organizers:${ev._id.toString()}`;
+              socket.join(orgRoom);
+              console.log(`[sockets] user is admin -> joined ${orgRoom}`);
+            });
+          } else {
+            console.log(`[sockets] no admin events found for user ${uid}`);
+          }
+        } catch (err) {
+          console.warn("[sockets] error while fetching admin events to join organizer rooms:", err);
+        }
+      } else {
+        console.log("[sockets] socket.user not present - skipping personal/organizer room joins");
+      }
+    } catch (err) {
+      console.warn("[sockets] error in personal/organizer join logic:", err);
+    }
+
+    // -------------------
     // DEBUGPING
+    // -------------------
     socket.on("ping:test", (cb) => {
       console.log("📡 Received ping:test from client");
       if (typeof cb === "function") cb({ ok: true, time: new Date().toISOString() });
@@ -132,6 +166,7 @@ export default function setupSocket(io) {
 
     // -------------------------------
     // EVENT chat:send (event announcements)
+    // (UNCHANGED behavior - only event or club admins can send)
     // -------------------------------
     socket.on("chat:send", async (payload = {}, ack) => {
       console.log("📩 Received chat:send event with payload:", payload);
@@ -209,6 +244,7 @@ export default function setupSocket(io) {
 
     // -----------------------------------
     // CLUB chat:send:club (club announcement)
+    // (UNCHANGED behavior)
     // -----------------------------------
     socket.on("chat:send:club", async (payload = {}, ack) => {
       console.log("📩 Received chat:send:club with payload:", payload);
@@ -275,6 +311,164 @@ export default function setupSocket(io) {
         if (ack) ack({ success: true, data: payloadOut });
       } catch (err) {
         console.error("❌ chat:send:club handler error:", err);
+        if (ack) ack({ success: false, error: "Server error" });
+      }
+    });
+
+    // -----------------------------------
+    // NEW: Private Event Query handler (participant <-> organizers)
+    // -----------------------------------
+    socket.on("query:send", async (payload = {}, ack) => {
+      console.log("[query] Received query:send payload:", payload, "from socket:", socket.id);
+
+      try {
+        const { eventId, message, replyToId, targetUser, visibility } = payload || {};
+
+        if (!eventId || !message || !message.trim()) {
+          console.warn("[query] invalid payload");
+          if (ack) ack({ success: false, error: "Invalid payload: eventId & message required" });
+          return;
+        }
+
+        // require authenticated user
+        if (!socket.user || !(socket.user._id || socket.user.id)) {
+          console.warn("[query] unauthorized: no socket.user");
+          if (ack) ack({ success: false, error: "Unauthorized" });
+          return;
+        }
+
+        const userId = (socket.user._id || socket.user.id).toString();
+
+        // load event
+        const event = await Event.findById(eventId).lean();
+        if (!event) {
+          console.warn("[query] event not found:", eventId);
+          if (ack) ack({ success: false, error: "Event not found" });
+          return;
+        }
+
+        // determine roles: is admin? is participant?
+        const isEventAdmin = Array.isArray(event.admin)
+          ? event.admin.map(String).includes(userId)
+          : event.admin?.toString() === userId;
+
+        const isManager = Array.isArray(event.managers)
+          ? event.managers.map(String).includes(userId)
+          : false;
+
+        // check participants array if present
+        let isParticipant = false;
+        if (Array.isArray(event.participants)) {
+          isParticipant = event.participants.map(String).includes(userId);
+        } else {
+          // fallback: if no participants array, allow if user is present in socket.user (best-effort)
+          isParticipant = true; // BE CAREFUL: change logic if you track participants elsewhere
+        }
+
+        console.log("[query] role checks:", { isEventAdmin, isManager, isParticipant });
+
+        if (!isParticipant && !isEventAdmin && !isManager) {
+          console.warn("[query] not authorized to send query for this event");
+          if (ack) ack({ success: false, error: "Not authorized" });
+          return;
+        }
+
+        // decide senderRole used in QueryMessage
+        const senderRole = isEventAdmin || isManager ? "event-admin" : "participant";
+        const finalVisibility = visibility === "public" && (isEventAdmin || isManager) ? "public" : "private";
+
+        // targetUser resolution:
+        // - if participant sends a query -> targetUser = sender (so admins know who asked)
+        // - if admin sends a reply and included targetUser -> that participant gets it
+        const finalTarget =
+          senderRole === "participant" ? userId : (targetUser ? targetUser : null);
+
+        // create and save QueryMessage
+        const qdoc = await QueryMessage.create({
+          eventId,
+          sender: userId,
+          senderRole,
+          message: message.trim(),
+          visibility: finalVisibility,
+          targetUser: finalTarget,
+          replyTo: replyToId || null,
+        });
+
+        const populated = await QueryMessage.findById(qdoc._id)
+          .populate("sender", "username name")
+          .lean();
+
+        const out = {
+          _id: populated._id,
+          eventId: populated.eventId,
+          message: populated.message,
+          sender: populated.sender,
+          senderRole: populated.senderRole,
+          visibility: populated.visibility,
+          targetUser: populated.targetUser,
+          createdAt: populated.createdAt,
+        };
+
+        // Always notify organizers room for the event
+        const organizersRoom = `event-organizers:${eventId}`;
+        io.to(organizersRoom).emit("query:new", out);
+        console.log(`[query] emitted query:new to organizers room ${organizersRoom}`);
+
+        // Notify the individual user:
+        if (senderRole === "participant") {
+          // participant -> send to the participant themself (so they see their message)
+          io.to(`user:${userId}`).emit("query:new", out);
+          console.log(`[query] emitted query:new to sender user:${userId}`);
+        } else {
+          // sender is admin -> if a targetUser is provided, send to that participant only
+          if (finalTarget) {
+            io.to(`user:${finalTarget}`).emit("query:new", out);
+            console.log(`[query] emitted query:new to target user:${finalTarget}`);
+          } else {
+            console.log("[query] admin message without targetUser -> only organizers notified");
+          }
+        }
+
+        if (ack) ack({ success: true, data: out });
+      } catch (err) {
+        console.error("[query] query:send error:", err);
+        if (ack) ack({ success: false, error: "Server error" });
+      }
+    });
+
+    // -----------------------------------
+    // Optional: allow admins to join organizer room on demand
+    // -----------------------------------
+    socket.on("join:organizer", async ({ eventId } = {}, ack) => {
+      console.log(`[sockets] join:organizer request for eventId=${eventId} by socket ${socket.id}`);
+      try {
+        if (!socket.user || !(socket.user._id || socket.user.id)) {
+          if (ack) ack({ success: false, error: "Unauthorized" });
+          return;
+        }
+        if (!eventId) {
+          if (ack) ack({ success: false, error: "eventId required" });
+          return;
+        }
+        const event = await Event.findById(eventId).lean();
+        if (!event) {
+          if (ack) ack({ success: false, error: "Event not found" });
+          return;
+        }
+        const userId = (socket.user._id || socket.user.id).toString();
+        const isEventAdmin = Array.isArray(event.admin)
+          ? event.admin.map(String).includes(userId)
+          : event.admin?.toString() === userId;
+        if (!isEventAdmin) {
+          if (ack) ack({ success: false, error: "Not an organizer" });
+          return;
+        }
+        const room = `event-organizers:${eventId}`;
+        socket.join(room);
+        console.log(`[sockets] socket ${socket.id} joined organizer room ${room}`);
+        if (ack) ack({ success: true });
+      } catch (err) {
+        console.error("[sockets] join:organizer error:", err);
         if (ack) ack({ success: false, error: "Server error" });
       }
     });

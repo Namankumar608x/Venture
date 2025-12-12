@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import Team from "../models/team.js";
 import Schedule from "../models/schedule.js";
 import {checkadmin,checkmanager} from "../middlewares/roles.js";
+import QueryMessage from "../models/QueryMessage.js";
 const router=express.Router();
 const checkEvent = async (eventId) => {
   return await Event.findById(eventId);
@@ -341,6 +342,114 @@ let isManager = event.managers?.map(id => id.toString()).includes(userId);
     });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
+  }
+});
+// -------------------
+// PRIVATE QUERY ROUTES (GET + POST)
+// -------------------
+
+
+
+// GET: fetch queries for an event
+router.get("/:eventId/queries", authenticate, async (req, res) => {
+  try {
+    const eventId = req.params.eventId;
+    const userId = req.user?.id || req.user?._id;
+
+    console.log("[routes:event] GET /:eventId/queries user:", userId);
+
+    const event = await Event.findById(eventId).lean();
+    if (!event) return res.status(404).json({ success: false, error: "Event not found" });
+
+    const uid = String(userId);
+
+    const isEventAdmin = Array.isArray(event.admin)
+      ? event.admin.map(String).includes(uid)
+      : event.admin?.toString() === uid;
+
+    const isManager = Array.isArray(event.managers)
+      ? event.managers.map(String).includes(uid)
+      : false;
+
+    let query = { eventId };
+
+    if (!(isEventAdmin || isManager)) {
+      // participant view → private only
+      query = {
+        eventId,
+        $or: [{ sender: uid }, { targetUser: uid }],
+        visibility: "private",
+      };
+    }
+
+    const items = await QueryMessage.find(query)
+      .sort({ createdAt: 1 })
+      .populate("sender", "username name")
+      .lean();
+
+    return res.json({ success: true, data: items });
+  } catch (err) {
+    console.error("[routes:event] GET queries error:", err);
+    return res.status(500).json({ success: false, error: "Server error" });
+  }
+});
+
+// POST: create query (fallback when socket unavailable)
+router.post("/:eventId/queries", authenticate, async (req, res) => {
+  try {
+    const eventId = req.params.eventId;
+    const message = (req.body?.message || "").trim();
+    const userId = req.user?.id || req.user?._id;
+
+    console.log("[routes:event] POST /:eventId/queries body:", req.body);
+
+    if (!message) return res.status(400).json({ success: false, error: "Message required" });
+
+    const event = await Event.findById(eventId).lean();
+    if (!event) return res.status(404).json({ success: false, error: "Event not found" });
+
+    const uid = String(userId);
+
+    const isEventAdmin = Array.isArray(event.admin)
+      ? event.admin.map(String).includes(uid)
+      : event.admin?.toString() === uid;
+
+    const isManager = Array.isArray(event.managers)
+      ? event.managers.map(String).includes(uid)
+      : false;
+
+    let isParticipant = true;
+    if (Array.isArray(event.participants)) {
+      isParticipant = event.participants.map(String).includes(uid);
+    }
+
+    if (!isParticipant && !isEventAdmin && !isManager) {
+      console.warn("[routes:event] unauthorized POST query", uid);
+      return res.status(403).json({ success: false, error: "Not authorized" });
+    }
+
+    const senderRole = isEventAdmin || isManager ? "event-admin" : "participant";
+    const visibility = "private";
+    const targetUser = senderRole === "participant" ? uid : req.body.targetUser || null;
+
+    const q = await QueryMessage.create({
+      eventId,
+      sender: uid,
+      senderRole,
+      message,
+      visibility,
+      targetUser,
+      replyTo: req.body.replyToId || null,
+    });
+
+    const populated = await QueryMessage.findById(q._id)
+      .populate("sender", "username name")
+      .lean();
+
+    return res.status(201).json({ success: true, data: populated });
+  } catch (err) {
+    console.error("[routes:event] POST queries error:", err);
+    return res.status(500).json({ success: false, error: "Server error" });
   }
 });
 
