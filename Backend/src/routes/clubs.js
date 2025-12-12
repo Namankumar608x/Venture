@@ -144,5 +144,17 @@ router.post("/:clubId/chat", auth, async (req, res) => {
     return res.status(500).json({ success: false, error: "Server error" });
   }
 });
+// GET /clubs/:clubId  -> return club info (for frontend admin detection)
+router.get("/:clubId", auth, async (req, res) => {
+  try {
+    const { clubId } = req.params;
+    const club = await Club.findById(clubId).lean();
+    if (!club) return res.status(404).json({ success:false, error: "Club not found" });
+    return res.json({ success: true, club });
+  } catch (err) {
+    console.error("GET /clubs/:clubId error:", err);
+    return res.status(500).json({ success:false, error: "Server error" });
+  }
+});
 
 export default router;
