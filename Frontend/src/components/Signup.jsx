@@ -23,7 +23,7 @@ function Signup() {
       const payload = jwtDecode(token);
       if (payload.exp && Date.now() / 1000 < payload.exp) {
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-        navigate("/home", { replace: true });
+        navigate("/", { replace: true });
       } else {
         localStorage.removeItem("accessToken");
         delete axios.defaults.headers.common["Authorization"];
@@ -68,7 +68,7 @@ function Signup() {
 
       setMessage("Registration successful");
       console.log("Signup response:", res.data);
-      navigate("/home", { replace: true });
+      navigate("/", { replace: true });
     } catch (err) {
       console.error("Signup error:", err);
       setMessage(err.response?.data?.message || "Registration failed");

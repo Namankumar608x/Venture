@@ -21,7 +21,7 @@ function Login() {
       if (payload.exp && Date.now() / 1000 < payload.exp) {
         // token valid -> set default header and navigate
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-        navigate("/home", { replace: true });
+        navigate("/", { replace: true });
       } else {
         // token expired -> clean up
         localStorage.removeItem("accessToken");
@@ -64,7 +64,7 @@ console.log("Token variable:", token);
 
       setMessage("Login successful");
       console.log("Login response:", res.data);
-      navigate("/home", { replace: true });
+      navigate("/", { replace: true });
     } catch (err) {
       console.error("Login error:", err);
       setMessage(err.response?.data?.error || "Invalid credentials");

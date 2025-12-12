@@ -53,7 +53,7 @@ export default function App() {
 
         {/* Protected Routes */}
         <Route
-          path="/home"
+          path="/"
           element={
             <ProtectedRoute>
               <>

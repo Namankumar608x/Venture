@@ -8,6 +8,8 @@ export default function EventPage() {
   const { clubid,eventId } = useParams();
 const [admins, setAdmins] = useState([]);
 const [managers, setManagers] = useState([]);
+const [schedules,setschedule]=useState([]);
+const [teams,setteams]=useState([]);
   const [loading, setLoading] = useState(true);
   const [event, setEvent] = useState(null);
   const [role, setRole] = useState("participant");
@@ -73,10 +75,42 @@ const fetchRoles = async () => {
     console.log("Role fetch error:", err.response?.data);
   }
 };
+const fetchSchedules = async () => {
+  try {
+    const config = getAuthConfig();
+    if (!config) return;
 
+    const res = await axios.get(
+      `http://localhost:5005/events/${eventId}/schedules`,
+      config
+    );
+
+    setschedule(res.data);
+  } catch (err) {
+    console.log("Role fetch error:", err.response?.data);
+  }
+};
+const fetchteams = async () => {
+  try {
+    const config = getAuthConfig();
+    if (!config) return;
+
+    const res = await axios.get(
+      `http://localhost:5005/teams/${eventId}`,
+      config
+    );
+
+    setteams(res.data);
+  } catch (err) {
+    console.log("Role fetch error:", err.response?.data);
+  }
+};
 useEffect(() => {
   fetchEvent();
   fetchRoles();
+  fetchSchedules();
+  fetchteams();
+
 }, [eventId]);
   // -----------------------------------------------------
   // AUTH HEADER
@@ -151,8 +185,8 @@ useEffect(() => {
   const handleSchedule = (e) => {
     e.preventDefault();
     postAction(
-      "http://localhost:5005/events/new-schedule",
-      { ...scheduleForm, eventid: eventId },
+      `http://localhost:5005/schedule/${eventId}/new-schedule`,
+      { ...scheduleForm,  },
       "Schedule created"
     );
   };
@@ -282,10 +316,10 @@ useEffect(() => {
   
 
     <div className="space-y-3 mb-4">
-      {event.schedule.length === 0 ? (
+      {schedules.length === 0 ? (
         <p className="text-slate-400 text-sm">No schedules yet.</p>
       ) : (
-        event.schedule.map((s) => (
+        schedules.map((s) => (
           <div
             key={s._id}
             onClick={() => navigate(`/events/${clubid}/${eventId}/${s._id}`)}
@@ -369,10 +403,10 @@ useEffect(() => {
           <div className={card}>
             <h2 className="text-xl font-semibold mb-4">Teams</h2>
 
-            {event.teams.length === 0 ? (
+            {teams.length === 0 ? (
               <p className="text-slate-400 text-sm">No teams yet.</p>
             ) : (
-              event.teams.map((t) => {
+              teams.map((t) => {
                 const isLeader = t.leader?._id === currentUser;
                 const isMember = t.members.includes(currentUser);
 
@@ -531,7 +565,7 @@ useEffect(() => {
                   }
                 >
                   <option value="">Select schedule</option>
-                  {event.schedule.map((s) => (
+                  {schedules.map((s) => (
                     <option key={s._id} value={s._id}>
                       {s.title} — {s.date}
                     </option>
@@ -589,7 +623,7 @@ useEffect(() => {
         <div className={card}>
           <h2 className="text-xl font-semibold mb-3">Updates</h2>
           <div className="space-y-3">
-            {event.updates
+            {event?.updates?.length > 0 ? (event.updates
               .slice()
               .reverse()
               .map((u) => (
@@ -602,7 +636,14 @@ useEffect(() => {
                   </div>
                   <div className="text-slate-200 mt-1">{u.message}</div>
                 </div>
-              ))}
+              ))):
+               <div
+                   
+                  className="p-3 bg-slate-700/40 rounded border border-slate-600"
+                > No updates
+                </div>
+
+                }
           </div>
         </div>
 

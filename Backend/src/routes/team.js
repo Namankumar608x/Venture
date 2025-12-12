@@ -8,7 +8,16 @@ import mongoose from "mongoose";
 const router = express.Router();
 
 const checkEvent = async (eventId) => Event.findById(eventId);
-
+router.get("/:eventid/",async(req,res)=>{
+const {eventid}=req.params;
+const event = await checkEvent(eventid);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    const teams=await Team.find({eventid}).populate("leader", "name username email")
+      .populate("members", "name username email")
+      .populate("requests.user", "name username email");
+       
+      return res.status(200).json(teams);
+});
 /* ---------------------------------------------------
    CREATE TEAM
 --------------------------------------------------- */
@@ -22,14 +31,19 @@ router.post("/new-team", authenticate, async (req, res) => {
 
     const existingTeam = await Team.findOne({
       eventid,
-      $or: [{ leader: adminid }, { members: adminid }],
+      $or: [{ leader: adminid }],
     });
 
-    if (existingTeam)
-      return res.status(400).json({
+    if (existingTeam){
+       console.log("you are already in a team");
+             return res.status(400).json({
+   
         message: "You are already part of a team in this event",
       });
 
+    }
+
+      console.log("new team created");
     const team = new Team({ teamname, leader: adminid, eventid });
     team.members.push(adminid);
 
