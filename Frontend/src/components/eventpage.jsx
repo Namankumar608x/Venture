@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { useParams } from "react-router-dom";
+
 import { jwtDecode } from "jwt-decode";
+import { Link, useParams } from "react-router-dom";
 
 export default function EventPage() {
   const { clubid,eventId } = useParams();
@@ -727,6 +728,34 @@ useEffect(() => {
         )}
      
       </div>
+      <div className="flex gap-4 mt-4 mb-6">
+  <Link
+    to={`/events/${clubid}/${eventId}/bracket`}
+    className="px-4 py-2 bg-slate-800 hover:bg-slate-700
+               border border-slate-700 rounded-lg text-sm"
+  >
+    Bracket
+  </Link>
+
+  <Link
+    to={`/events/${clubid}/${eventId}/matches`}
+    className="px-4 py-2 bg-slate-800 hover:bg-slate-700
+               border border-slate-700 rounded-lg text-sm"
+  >
+    Matches
+  </Link>
+
+  
+
+  <Link
+    to={`/events/${clubid}/${eventId}/winner`}
+    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600
+               rounded-lg text-sm"
+  >
+    Winner
+  </Link>
+</div>
+
     </div>
    
   );

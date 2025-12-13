@@ -14,6 +14,11 @@ import Signupclub from "./components/signupclub.jsx";
 import EventQueries from "./components/EventQueries";
 import AdminEventQueries from "./components/AdminEventQueries";
 import Edit from "./components/editevent.jsx";
+import EventBracket from "./components/EventBracket";
+import EventMatches from "./components/EventMatches";
+import MatchControl from "./components/MatchControl";
+import EventWinner from "./components/EventWinner";
+
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("accessToken");
   const refreshToken = localStorage.getItem("refreshToken");
@@ -88,6 +93,32 @@ export default function App() {
       <Layout><AdminEventQueries /></Layout>
     </ProtectedRoute>
   } />
+  {/* EVENT – TOURNAMENT PAGES */}
+
+<Route path="/events/:clubid/:eventId/bracket" element={
+  <ProtectedRoute>
+    <Layout><EventBracket /></Layout>
+  </ProtectedRoute>
+} />
+
+<Route path="/events/:clubid/:eventId/matches" element={
+  <ProtectedRoute>
+    <Layout><EventMatches /></Layout>
+  </ProtectedRoute>
+} />
+
+<Route path="/events/:clubid/:eventId/match/:matchId" element={
+  <ProtectedRoute>
+    <Layout><MatchControl /></Layout>
+  </ProtectedRoute>
+} />
+
+<Route path="/events/:clubid/:eventId/winner" element={
+  <ProtectedRoute>
+    <Layout><EventWinner /></Layout>
+  </ProtectedRoute>
+} />
+
 
   <Route path="*" element={<Login />} />
 
