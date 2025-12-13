@@ -1,4 +1,3 @@
-import React from "react";
 import { Routes, Route } from "react-router-dom";
 
 import Login from "./components/login.jsx";
@@ -12,8 +11,9 @@ import ClubChat from "./components/ClubChat";
 import TeamManage from "./components/teammanage";
 import Loginclub from "./components/loginclub.jsx";
 import Signupclub from "./components/signupclub.jsx";
+import EventQueries from "./components/EventQueries";
+import AdminEventQueries from "./components/AdminEventQueries";
 
-// ---------- PROTECTED ROUTE with debug ----------
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("accessToken");
   console.log("DEBUG ProtectedRoute token:", token);
@@ -85,20 +85,29 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+    
 
-        <Route
-          path="/events/:clubid"
-          element={
-            <ProtectedRoute>
-              <>
-                {console.log("Route: /events/:clubid")}
-                <Layout>
-                  <EventsDashboard />
-                </Layout>
-              </>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/events/:clubid"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <EventsDashboard />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/events/:clubid/:eventId"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <EventPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
 
         <Route
           path="/events/:clubid/:eventId"
@@ -126,53 +135,53 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+      <Route
+        path="/events/:clubid/:eventId/:scheduleid"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Schedule />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/events/:clubid/:eventId/:scheduleid"
-          element={
-            <ProtectedRoute>
-              <>
-                {console.log(
-                  "Route: /events/:clubid/:eventId/:scheduleid"
-                )}
-                <Layout>
-                  <Schedule />
-                </Layout>
-              </>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/club/:clubId/chat"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <ClubChat key={window.location.pathname} clubId={window.location.pathname.split("/")[2]} />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
 
-        {/* Fixed ClubChat route */}
-        <Route
-          path="/club/:clubId/chat"
-          element={
-            <ProtectedRoute>
-              <>
-                {console.log("Route: /club/:clubId/chat")}
-                <Layout>
-                  <ClubChat
-                    // Debug log for clubId from URL
-                    key={window.location.pathname}
-                    clubId={window.location.pathname.split("/")[2]}
-                  />
-                </Layout>
-              </>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/events/:clubid/:eventId/query"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <EventQueries />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
 
-        {/* Catch-all fallback */}
-        <Route
-          path="*"
-          element={
-            <>
-              {console.warn("Route: No match! Redirecting to /login")}
-              <Login />
-            </>
-          }
-        />
-      </Routes>
+      <Route
+        path="/events/:clubid/:eventId/queries/admin"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminEventQueries />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="*" element={<Login />} />
+    </Routes>
     </>
   );
 }
+
