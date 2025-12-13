@@ -29,6 +29,55 @@ const nearestPowerOfTwo = (n) => {
   return p;
 };
 
+async function progressKnockoutWinner(match) {
+  console.log("[PROGRESSION] Starting progression");
+
+  const currentStage = await Stage.findById(match.stageid);
+  if (!currentStage) return;
+
+  console.log("[PROGRESSION] Current Stage:", currentStage.name);
+
+  // Find next stage safely
+  const nextStage = await Stage.findOne({
+    eventid: currentStage.eventid,
+    order: { $gt: currentStage.order }
+  }).sort({ order: 1 });
+
+  if (!nextStage) {
+    console.log("[PROGRESSION] No next stage (tournament end)");
+    return;
+  }
+
+  console.log("[PROGRESSION] Next Stage:", nextStage.name);
+
+  // Find index of match in current stage
+  const matchIndex = currentStage.matches.findIndex(
+    id => id.toString() === match._id.toString()
+  );
+
+  if (matchIndex === -1) {
+    console.log("[PROGRESSION][ERROR] Match not found in stage");
+    return;
+  }
+
+  const nextMatchIndex = Math.floor(matchIndex / 2);
+  const slot = matchIndex % 2 === 0 ? "teamA" : "teamB";
+
+  const nextMatchId = nextStage.matches[nextMatchIndex];
+  const nextMatch = await Match.findById(nextMatchId);
+
+  if (!nextMatch) return;
+
+  console.log(
+    `[PROGRESSION] Placing winner in ${nextStage.name} → Match ${nextMatchIndex} → ${slot}`
+  );
+
+  nextMatch[slot].teamId = match.winner;
+  await nextMatch.save();
+
+  console.log("[PROGRESSION] Winner progressed successfully");
+}
+
 const router=express.Router();
 const checkEvent = async (eventId) => {
   return await Event.findById(eventId);
@@ -958,6 +1007,209 @@ router.put("/:eventId/lock-schedule", authenticate, async (req, res) => {
     console.error("[LOCK][ERROR]", error);
     return res.status(500).json({
       message: "Server error while locking schedule"
+    });
+  }
+});
+router.put("/:matchId/status", authenticate, async (req, res) => {
+  const userId = req.user.id;
+  const { matchId } = req.params;
+  const { status } = req.body;
+
+  console.log("=====================================");
+  console.log("[MATCH STATUS] Update request");
+  console.log("[MATCH STATUS] User:", userId);
+  console.log("[MATCH STATUS] Match:", matchId);
+  console.log("[MATCH STATUS] New Status:", status);
+  console.log("=====================================");
+
+  try {
+    // 1️⃣ Validate status
+    if (!["live", "finished"].includes(status)) {
+      return res.status(400).json({
+        message: "Invalid status update"
+      });
+    }
+
+    // 2️⃣ Fetch match
+    const match = await Match.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+
+    // 3️⃣ Fetch event
+    const event = await Event.findById(match.eventid);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // 4️⃣ Schedule must be locked
+    if (!event.isScheduleLocked) {
+      return res.status(403).json({
+        message: "Schedule must be locked before starting matches"
+      });
+    }
+
+    // 5️⃣ Permission check
+    const isAdmin = event.admin.map(id => id.toString()).includes(userId);
+    const isManager = event.managers.map(id => id.toString()).includes(userId);
+
+    if (!isAdmin && !isManager) {
+      return res.status(403).json({
+        message: "Not authorized to update match status"
+      });
+    }
+
+    // 6️⃣ Validate transition
+    const currentStatus = match.status;
+
+    if (currentStatus === "upcoming" && status !== "live") {
+      return res.status(400).json({
+        message: "Match must go live before finishing"
+      });
+    }
+
+    if (currentStatus === "live" && status !== "finished") {
+      return res.status(400).json({
+        message: "Invalid match status transition"
+      });
+    }
+
+    if (currentStatus === "finished") {
+      return res.status(400).json({
+        message: "Match already finished"
+      });
+    }
+
+    // 7️⃣ Update status
+    match.status = status;
+    await match.save();
+
+    console.log("[MATCH STATUS] Updated successfully");
+
+    return res.status(200).json({
+      message: "Match status updated",
+      matchId,
+      status
+    });
+
+  } catch (error) {
+    console.error("[MATCH STATUS][ERROR]", error);
+    return res.status(500).json({
+      message: "Server error while updating match status"
+    });
+  }
+});
+router.put("/:matchId/result", authenticate, async (req, res) => {
+  const userId = req.user.id;
+  const { matchId } = req.params;
+  const { winnerTeamId, isDraw, decidedBy } = req.body || {};
+
+  console.log("=====================================");
+  console.log("[MATCH RESULT] Declare result");
+  console.log("[MATCH RESULT] User:", userId);
+  console.log("[MATCH RESULT] Match:", matchId);
+  console.log("[MATCH RESULT] Body:", req.body);
+  console.log("=====================================");
+
+  try {
+    // 1️⃣ Fetch match
+    const match = await Match.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+
+    // 2️⃣ Match must be finished
+    if (match.status !== "finished") {
+      return res.status(400).json({
+        message: "Match must be finished before declaring result"
+      });
+    }
+
+    // 3️⃣ Result already declared
+    if (match.winner || match.isDraw) {
+      return res.status(400).json({
+        message: "Match result already declared"
+      });
+    }
+
+    // 4️⃣ Fetch event
+    const event = await Event.findById(match.eventid);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // 5️⃣ Schedule lock check
+    if (!event.isScheduleLocked) {
+      return res.status(403).json({
+        message: "Schedule must be locked"
+      });
+    }
+
+    // 6️⃣ Permission check
+    const isAdmin = event.admin.map(id => id.toString()).includes(userId);
+    const isManager = event.managers.map(id => id.toString()).includes(userId);
+
+    if (!isAdmin && !isManager) {
+      return res.status(403).json({
+        message: "Not authorized to declare result"
+      });
+    }
+
+    // ==================================================
+    // 🟡 DRAW CASE
+    // ==================================================
+    if (isDraw === true) {
+      match.isDraw = true;
+      match.decidedBy = decidedBy || "DRAW";
+      await match.save();
+
+      console.log("[MATCH RESULT] Draw recorded");
+
+      return res.status(200).json({
+        message: "Match declared as draw",
+        matchId
+      });
+    }
+
+    // ==================================================
+    // 🟢 WINNER CASE
+    // ==================================================
+    if (!winnerTeamId) {
+      return res.status(400).json({
+        message: "winnerTeamId is required"
+      });
+    }
+
+    // Winner must be one of the teams
+    const teamA = match.teamA.teamId?.toString();
+    const teamB = match.teamB.teamId?.toString();
+
+    if (![teamA, teamB].includes(winnerTeamId)) {
+      return res.status(400).json({
+        message: "Winner must be one of the match teams"
+      });
+    }
+
+    match.winner = winnerTeamId;
+    match.decidedBy = decidedBy || "NORMAL";
+    await match.save();
+    // Auto progression (knockout only)
+if (match.matchType === "KNOCKOUT") {
+  await progressKnockoutWinner(match);
+}
+
+    console.log("[MATCH RESULT] Winner declared:", winnerTeamId);
+
+    return res.status(200).json({
+      message: "Match result declared",
+      matchId,
+      winnerTeamId
+    });
+
+  } catch (error) {
+    console.error("[MATCH RESULT][ERROR]", error);
+    return res.status(500).json({
+      message: "Server error while declaring result"
     });
   }
 });
