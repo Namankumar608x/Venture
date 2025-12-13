@@ -93,8 +93,9 @@ function EventsDashboard() {
         config
       );
       setMessage(res.data?.message || "Event created");
-      setEvent("");
-      // navigate to the new event page if eventId returned
+      setEvent({ name: "", description: "", maxPlayer: "" });
+     const updatedEvents = await fetchEventsForClub(selectedClub);
+setClubEvents(updatedEvents);
       if (res.data?.eventId) navigate(`/events/${res.data.eventId}`);
     } catch (err) {
       console.error(err);

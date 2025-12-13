@@ -431,142 +431,122 @@ useEffect(() => {
           </div>
 
           {/* ---------------- TEAMS ---------------- */}
-          <div className={card}>
-            <h2 className="text-xl font-semibold mb-4">Teams</h2>
+   <div className={card}>
+  <h2 className="text-xl font-semibold mb-4">Teams</h2>
+    <h3 className="text-lg font-semibold text-green-400 mb-2">Max team length: {event?.maxPlayer}</h3>
 
-            {teams.length === 0 ? (
-              <p className="text-slate-400 text-sm">No teams yet.</p>
-            ) : (
-              teams.map((t) => {
-                const isLeader = t.leader?._id === currentUser;
-                const isMember = t.members.includes(currentUser);
+  {/* ---------------- MY TEAM SECTION ---------------- */}
+  <h3 className="text-lg font-semibold text-blue-400 mb-2">My Team</h3>
 
-                return (
-                  <div
-                    key={t._id}
-                    className="p-3 bg-slate-700/40 rounded-lg border border-slate-600 mb-3"
-                  >
-                    <div className="font-medium">{t.teamname}</div>
-                    <div className="text-xs text-slate-400">
-                      Leader: {t.leader?.name}
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      Members: {t.members.length}
-                    </div>
+  {(() => {
+    const myTeam = teams.find((t) =>
+      t.members.some(m => String(m._id) === String(currentUser))
+    );
 
-                    {/* REQUEST TO JOIN */}
-                    {!isLeader && !isMember && (
-                      <button
-                        className="px-2 py-1 mt-2 bg-blue-600 text-xs rounded"
-                        onClick={() => sendJoinRequest(t._id)}
-                      >
-                        Request to Join
-                      </button>
-                    )}
-                    
+    if (!myTeam) {
+      return (
+        <div className="p-3 bg-slate-800/40 rounded-lg border border-slate-700">
+          <p className="text-slate-400 text-sm mb-3">
+            You are not part of any team.
+          </p>
 
-                    {/* APPROVAL PANEL FOR LEADER */}
-                    {isLeader && (
-                      <div className="mt-3 bg-slate-800/50 p-2 rounded border border-slate-700">
-                        <div className="text-xs mb-2">Join Requests:</div>
+          {/* Create team form */}
+          <form onSubmit={handleTeamCreate} className="flex gap-2 mb-3">
+            <input
+              className={input}
+              placeholder="Team name"
+              value={teamForm.teamname}
+              onChange={(e) =>
+                setTeamForm({ teamname: e.target.value })
+              }
+            />
+            <button className="px-3 bg-blue-600 rounded-lg">
+              Create
+            </button>
+          </form>
 
-                        {t.requests.length === 0 ? (
-                          <div className="text-xs text-slate-500">
-                            No pending requests
-                          </div>
-                        ) : (
-                          t.requests.map((req) => (
-                            <div
-                              key={req.user._id}
-                              className="flex justify-between items-center text-xs mb-1"
-                            >
-                              <span>{req.user.name}</span>
-                              <button
-                                className="px-2 py-1 bg-emerald-600 rounded"
-                                onClick={() => approveRequest(t._id, req.user._id)}
-                              >
-                                Approve
-                              </button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
+          {/* Join team button */}
+          <button
+            onClick={() => navigate(`/events/${clubid}/${eventId}/teams`)}
+            className="px-3 py-2 w-full bg-emerald-600 rounded-lg text-sm"
+          >
+            Browse & Join Teams
+          </button>
+        </div>
+      );
+    }
 
-            {/* CREATE TEAM (always visible) */}
-            <form onSubmit={handleTeamCreate} className="flex gap-2 mt-4">
-              <input
-                className={input}
-                placeholder="Team name"
-                value={teamForm.teamname}
-                onChange={(e) =>
-                  setTeamForm({ teamname: e.target.value })
-                }
-              />
-              <button className="px-3 bg-rose-600 rounded-lg">Create</button>
-            </form>
+    // If user IS in a team
+    return (
+      <div className="p-3 bg-slate-700/40 rounded-lg border border-slate-600 mb-4">
+        <div className="flex justify-between items-center">
+          <p className="font-medium text-lg">{myTeam.teamname}</p>
+
+          {myTeam.leader?._id === currentUser && (
+            <button
+              onClick={() =>
+                navigate(`/events/${clubid}/${eventId}/team/${myTeam._id}`)
+              }
+              className="px-2 py-1 text-xs bg-blue-600 rounded"
+            >
+              Manage Team
+            </button>
+          )}
+        </div>
+
+        <div className="text-xs text-slate-400 mt-1">
+          Leader: {myTeam.leader?.username}
+        </div>
+     
+
+        <div className="text-xs text-slate-400">
+          Members: {myTeam.members.length}
+        </div>
+          <div className="flex">
+  {myTeam.isRegistered ? (
+    <div className="ml-auto px-2 py-1 text-xs bg-green-600 text-white rounded">
+      Registered
+    </div>
+  ) : (
+    <div className="ml-auto px-2 py-1 text-xs bg-red-600 text-white rounded">
+      Not Registered
+    </div>
+  )}
+</div>
+      </div>
+    );
+  })()}
+
+  {/* ---------------- REGISTERED TEAMS ---------------- */}
+  <h3 className="text-lg font-semibold text-emerald-400 mt-4 mb-2">
+    Registered Teams
+  </h3>
+
+  {teams.filter(t => t.isRegistered).length === 0 ? (
+    <p className="text-slate-400 text-sm">No registered teams yet.</p>
+  ) : (
+    teams
+      .filter(t => t.isRegistered)
+      .map((t) => (
+        <div
+          key={t._id}
+          className="p-3 bg-slate-700/40 rounded-lg border border-slate-600 mb-3"
+        >
+          <div className="font-medium flex justify-between items-center">
+            <span>{t.teamname}</span>
+          </div>
+
+          <div className="text-xs text-slate-400">
+            Leader: {t.leader?.username}
+          </div>
+
+          <div className="text-xs text-slate-400">
+            Members: {t.members.length}
           </div>
         </div>
-        
-
-        {/* ---------------- ADMIN PANEL ---------------- */}
-        {role !== "participant" && (
-          <div className="grid lg:grid-cols-3 gap-6">
-
-            {/* Promote */}
-            <div className={card}>
-              <h3 className="font-semibold mb-2">Promote User</h3>
-              <form onSubmit={handlePromote} className="space-y-2">
-               <input
-  className={input}
-  placeholder="Search username or email"
-  value={searchQuery}
-  onChange={(e) => {
-    setSearchQuery(e.target.value);
-    setPromoteForm({
-      ...promoteForm,
-      userid: e.target.value,   // still store input
-    });
-  }}
-/>
-{searchResults.length > 0 && (
-  <div className="mt-1 bg-gray-800 rounded-lg p-2 max-h-48 overflow-y-auto">
-    {searchResults.map((u) => (
-      <div
-        key={u._id}
-        className="p-2 hover:bg-gray-700 cursor-pointer rounded-md"
-        onClick={() => {
-          setPromoteForm({ ...promoteForm, userid: u._id });
-          setSearchQuery(u.username || u.email);
-          setSearchResults([]);
-        }}
-      >
-        <p className="text-sm font-semibold">{u.username}</p>
-        <p className="text-xs text-gray-400">{u.email}</p>
-      </div>
-    ))}
-  </div>
-)}
-
-                <select
-                  className={input}
-                  value={promoteForm.post}
-                  onChange={(e) =>
-                    setPromoteForm({ ...promoteForm, post: e.target.value })
-                  }
-                >
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <button className="px-3 py-2 bg-blue-600 rounded-lg w-full">
-                  Promote
-                </button>
-              </form>
-            </div>
+      ))
+  )}
+</div>
 
             {/* Updates */}
             <div className={card}>
@@ -648,7 +628,7 @@ useEffect(() => {
               </form>
             </div>
           </div>
-        )}
+        )
 
         {/* ---------------- UPDATES ---------------- */}
         <div className={card}>

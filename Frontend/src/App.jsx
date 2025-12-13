@@ -1,6 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 
-import Login from "./components/Login";
+import Login from "./components/login.jsx";
 import Signup from "./components/Signup";
 import Home from "./components/Home";
 import EventsDashboard from "./components/event"; 
@@ -8,6 +8,9 @@ import EventPage from "./components/eventpage";
 import Schedule from "./components/schedule";
 import Layout from "./components/Layout";
 import ClubChat from "./components/ClubChat";
+import TeamManage from "./components/teammanage";
+import Loginclub from "./components/loginclub.jsx";
+import Signupclub from "./components/signupclub.jsx";
 import EventQueries from "./components/EventQueries";
 import AdminEventQueries from "./components/AdminEventQueries";
 
@@ -28,20 +31,61 @@ export default function App() {
   console.log("DEBUG App.jsx render");
 
   return (
-    <Routes>
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/login" element={<Login />} />
+    <>
+      <Routes>
+        {/* Public Routes */}
+        <Route
+          path="/signup"
+          element={
+            <>
+              {console.log("Route: /signup")}
+              <Signup />
+            </>
+          }
+        />
+<Route
+          path="/events/:clubid/signup"
+          element={
+            <>
+              {console.log("Route: /signup")}
+              <Signupclub />
+            </>
+          }
+        />
+        <Route
+          path="/"
+          element={
+            <>
+              {console.log("Route: /login")}
+              <Login />
+            </>
+          }
+        />
+        <Route
+          path="/events/:clubid/login"
+          element={
+            <>
+              {console.log("Route: /login")}
+              <Loginclub />
+            </>
+          }
+        />
 
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <Home />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+        {/* Protected Routes */}
+        <Route
+          path="/home"
+          element={
+            <ProtectedRoute>
+              <>
+                {console.log("Route: /home")}
+                <Layout>
+                  <Home />
+                </Layout>
+              </>
+            </ProtectedRoute>
+          }
+        />
+    
 
       <Route
         path="/events/:clubid"
@@ -65,6 +109,32 @@ export default function App() {
         }
       />
 
+        <Route
+          path="/events/:clubid/:eventId"
+          element={
+            <ProtectedRoute>
+              <>
+                {console.log("Route: /events/:clubid/:eventId")}
+                <Layout>
+                  <EventPage />
+                </Layout>
+              </>
+            </ProtectedRoute>
+          }
+        />
+                <Route
+          path="/events/:clubid/:eventId/team/:teamid"
+          element={
+            <ProtectedRoute>
+              <>
+                {console.log("Route: /events/:clubid/:eventId/team/:teamid")}
+                <Layout>
+                  <TeamManage />
+                </Layout>
+              </>
+            </ProtectedRoute>
+          }
+        />
       <Route
         path="/events/:clubid/:eventId/:scheduleid"
         element={
@@ -111,5 +181,7 @@ export default function App() {
 
       <Route path="*" element={<Login />} />
     </Routes>
+    </>
   );
 }
+

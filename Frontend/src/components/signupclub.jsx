@@ -1,6 +1,6 @@
 // src/components/Signup.jsx
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import {jwtDecode} from "jwt-decode";
 
@@ -14,7 +14,7 @@ function Signup() {
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-
+  const {clubid}=useParams();
   // If user already has a valid token, go to home
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
@@ -50,7 +50,7 @@ function Signup() {
     setIsLoading(true);
     setMessage("");
     try {
-      const res = await axios.post("http://localhost:5005/auth/signup", {
+      const res = await axios.post(`http://localhost:5005/auth/${clubid}/signup`, {
         username: formData.username,
         name: formData.fullName,
         email: formData.email,
