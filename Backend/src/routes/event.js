@@ -337,7 +337,8 @@ let isManager = event.managers?.map(id => id.toString()).includes(userId);
 
     res.json({
       event,
-      role: isAdmin ? "admin" : isManager ? "manager" : "participant"
+      role: isAdmin ? "admin" : isManager ? "manager" : "participant",
+      
     });
   } catch (err) {
     res.status(500).json({ message: "Server error" });

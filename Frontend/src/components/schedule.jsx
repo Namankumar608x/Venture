@@ -24,7 +24,7 @@ const scheduleId = scheduleid;
     try {
       const config = getAuthConfig();
       const res = await axios.get(
-        `http://localhost:5005/schedule/${clubid}/${eventId}/${scheduleId}`,
+        `http://localhost:5005/schedule/${scheduleId}`,
         config
       );
 
@@ -68,7 +68,7 @@ const scheduleId = scheduleid;
         <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
           <h2 className="text-xl font-semibold">Matches</h2>
           <div className="mt-4 space-y-4">
-            {matches.length === 0 ? (
+            {matches?.length==0 ? (
               <p className="text-slate-500 text-sm">No matches yet</p>
             ) : (
               matches.map((m) => (
@@ -79,7 +79,7 @@ const scheduleId = scheduleid;
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="font-semibold text-lg">
-                        {m.teamA.teamname} vs {m.teamB.teamname}
+                        {m.teamA.teamId.teamname} vs {m.teamB.teamId.teamname}
                       </p>
                       <p className="text-xs text-slate-400">
                         {m.time}

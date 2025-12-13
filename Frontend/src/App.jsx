@@ -1,7 +1,7 @@
 import React from "react";
 import { Routes, Route } from "react-router-dom";
 
-import Login from "./components/Login";
+import Login from "./components/login.jsx";
 import Signup from "./components/Signup";
 import Home from "./components/Home";
 import EventsDashboard from "./components/event"; 
@@ -9,6 +9,9 @@ import EventPage from "./components/eventpage";
 import Schedule from "./components/schedule";
 import Layout from "./components/Layout";
 import ClubChat from "./components/ClubChat";
+import TeamManage from "./components/teammanage";
+import Loginclub from "./components/loginclub.jsx";
+import Signupclub from "./components/signupclub.jsx";
 
 // ---------- PROTECTED ROUTE with debug ----------
 function ProtectedRoute({ children }) {
@@ -40,9 +43,17 @@ export default function App() {
             </>
           }
         />
-
+<Route
+          path="/events/:clubid/signup"
+          element={
+            <>
+              {console.log("Route: /signup")}
+              <Signupclub />
+            </>
+          }
+        />
         <Route
-          path="/login"
+          path="/"
           element={
             <>
               {console.log("Route: /login")}
@@ -50,10 +61,19 @@ export default function App() {
             </>
           }
         />
+        <Route
+          path="/events/:clubid/login"
+          element={
+            <>
+              {console.log("Route: /login")}
+              <Loginclub />
+            </>
+          }
+        />
 
         {/* Protected Routes */}
         <Route
-          path="/"
+          path="/home"
           element={
             <ProtectedRoute>
               <>
@@ -88,6 +108,19 @@ export default function App() {
                 {console.log("Route: /events/:clubid/:eventId")}
                 <Layout>
                   <EventPage />
+                </Layout>
+              </>
+            </ProtectedRoute>
+          }
+        />
+                <Route
+          path="/events/:clubid/:eventId/team/:teamid"
+          element={
+            <ProtectedRoute>
+              <>
+                {console.log("Route: /events/:clubid/:eventId/team/:teamid")}
+                <Layout>
+                  <TeamManage />
                 </Layout>
               </>
             </ProtectedRoute>

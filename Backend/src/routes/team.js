@@ -8,8 +8,52 @@ import mongoose from "mongoose";
 const router = express.Router();
 
 const checkEvent = async (eventId) => Event.findById(eventId);
+
+router.get("/team/notifications", authenticate, async (req, res) => {
+  try {
+    const userid = req.user.id;
+
+    const user = await User.findById(userid)
+      .populate("notifications.requser", "name username email")
+      .populate("notifications.teamid", "teamname");
+
+    if (!user || user.notifications.length === 0)
+      return res.status(200).json({ notifications: [] });
+
+    const notifications = user.notifications.map((n) => ({
+      id: n._id,
+      message: n.message,
+      userName: n.requser?.name,
+      teamName: n.teamid?.teamname,
+      requser: n.requser?._id,
+      teamid: n.teamid?._id,
+      createdAt: n.createdAt,
+    }));
+
+    return res.json({ notifications });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+router.get("/team/:teamid/",async(req,res)=>{
+  try {
+    const {teamid}=req.params;
+    
+    const teams=await Team.findById(teamid).populate("leader", "name username email")
+      .populate("members", "name username email")
+      .populate("requests.user", "name username email");
+       
+      return res.status(200).json(teams);
+  } catch (error) {
+     console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+
+});
 router.get("/:eventid/",async(req,res)=>{
-const {eventid}=req.params;
+  try {
+    const {eventid}=req.params;
 const event = await checkEvent(eventid);
     if (!event) return res.status(404).json({ message: "Event not found" });
     const teams=await Team.find({eventid}).populate("leader", "name username email")
@@ -17,7 +61,14 @@ const event = await checkEvent(eventid);
       .populate("requests.user", "name username email");
        
       return res.status(200).json(teams);
+  } catch (error) {
+     console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+
 });
+
+
 /* ---------------------------------------------------
    CREATE TEAM
 --------------------------------------------------- */
@@ -62,10 +113,11 @@ router.post("/new-team", authenticate, async (req, res) => {
 /* ---------------------------------------------------
    JOIN REQUEST
 --------------------------------------------------- */
-router.post("/team/join-request", authenticate, async (req, res) => {
+router.post("/invite", authenticate, async (req, res) => {
   try {
-    const { teamid } = req.body;
-    const userid = req.user.id;
+    const { teamid,userid } = req.body;
+    const adminid = req.user.id;
+    const admin=await User.findById(adminid);
 
     if (!mongoose.Types.ObjectId.isValid(teamid))
       return res.status(400).json({ message: "Invalid team ID" });
@@ -74,66 +126,32 @@ router.post("/team/join-request", authenticate, async (req, res) => {
     if (!team) return res.status(404).json({ message: "Team not found" });
 
     if (team.requests.some((r) => r.user.toString() === userid))
-      return res.status(400).json({ message: "Already requested" });
+      return res.status(400).json({ message: "Already invited" });
 
     if (team.members.includes(userid))
       return res.status(400).json({ message: "You are already a member" });
 
     team.requests.push({ user: userid });
-    await team.save();
+    await team.save();    
 
-    const leader = await User.findById(team.leader);
-
-    leader.notifications.push({
-      message: `User ${req.user.name} requested to join team ${team.teamname}`,
-      requser: userid,
+    const user=await User.findById(userid);
+    user.notifications.push({
+      message: `User- "${admin.name}" invited to join team- "${team.teamname}" `,
+      requser: adminid,
       teamid: team._id, // IMPORTANT FIX
       createdAt: new Date(),
     });
+    await user.save();
 
-    await leader.save();
-
-    return res.json({ message: "Join request sent!" });
+    return res.json({ message: "Join invite sent!" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-/* ---------------------------------------------------
-   GET NOTIFICATIONS
---------------------------------------------------- */
-router.get("/team/notifications", authenticate, async (req, res) => {
-  try {
-    const userid = req.user.id;
 
-    const user = await User.findById(userid)
-      .populate("notifications.requser", "name username email")
-      .populate("notifications.teamid", "teamname");
-
-    if (!user || user.notifications.length === 0)
-      return res.status(200).json({ notifications: [] });
-
-    const notifications = user.notifications.map((n) => ({
-      id: n._id,
-      message: n.message,
-      userName: n.requser?.name,
-      teamName: n.teamid?.teamname,
-      requser: n.requser?._id,
-      teamid: n.teamid?._id,
-      createdAt: n.createdAt,
-    }));
-
-    return res.json({ notifications });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-/* ---------------------------------------------------
-   APPROVE REQUEST
---------------------------------------------------- */
+// --------------------------------------------------- */
 router.post("/team/approve-request", authenticate, async (req, res) => {
   try {
     const { notificationId } = req.body;

@@ -5,7 +5,7 @@ const eventSchema=new mongoose.Schema({
       description:{type:String},
   admin:[{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true}],
   managers:[{type:mongoose.Schema.Types.ObjectId,ref:"User",default:[]}],
-
+users:[{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true}],
   club:{type:mongoose.Schema.Types.ObjectId,ref:"Club",required:true},
   // Event updates (announcements, notices, schedule, results)
     updates: [
