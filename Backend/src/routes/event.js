@@ -9,6 +9,26 @@ import Team from "../models/team.js";
 import Schedule from "../models/schedule.js";
 import {checkadmin,checkmanager} from "../middlewares/roles.js";
 import QueryMessage from "../models/QueryMessage.js";
+import Stage from "../models/stages.js";
+
+
+// Utility: shuffle array (Fisher-Yates)
+const shuffleArray = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+// Utility: nearest lower power of 2
+const nearestPowerOfTwo = (n) => {
+  let p = 1;
+  while (p * 2 <= n) p *= 2;
+  return p;
+};
+
 const router=express.Router();
 const checkEvent = async (eventId) => {
   return await Event.findById(eventId);
@@ -453,5 +473,275 @@ router.post("/:eventId/queries", authenticate, async (req, res) => {
     return res.status(500).json({ success: false, error: "Server error" });
   }
 });
+
+
+// ---------------------------------------------------
+// STEP 1: GENERATE SCHEDULE (SKELETON)
+// ---------------------------------------------------
+router.post("/:eventId/schedule", authenticate, async (req, res) => {
+  const userId = req.user.id;
+  const { eventId } = req.params;
+  const { type } = req.body;
+
+  console.log("=====================================");
+  console.log("[SCHEDULE] Schedule generation request");
+  console.log("[SCHEDULE] User:", userId);
+  console.log("[SCHEDULE] Event:", eventId);
+  console.log("[SCHEDULE] Type:", type);
+  console.log("=====================================");
+
+  try {
+    // 1️⃣ Validate type
+    if (!type) {
+      console.log("[SCHEDULE][ERROR] type missing");
+      return res.status(400).json({ message: "Schedule type is required" });
+    }
+
+    if (!["KNOCKOUT", "LEAGUE_FINAL"].includes(type)) {
+      console.log("[SCHEDULE][ERROR] invalid type:", type);
+      return res.status(400).json({ message: "Invalid schedule type" });
+    }
+
+    // 2️⃣ Fetch event
+    const event = await Event.findById(eventId);
+    if (!event) {
+      console.log("[SCHEDULE][ERROR] Event not found");
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    console.log("[SCHEDULE] Event found:", event.name);
+
+    // 3️⃣ Permission check
+    const isAdmin = event.admin.map(id => id.toString()).includes(userId);
+    const isManager = event.managers.map(id => id.toString()).includes(userId);
+
+    console.log("[SCHEDULE] isAdmin:", isAdmin);
+    console.log("[SCHEDULE] isManager:", isManager);
+
+    if (!isAdmin && !isManager) {
+      console.log("[SCHEDULE][ERROR] Unauthorized");
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    // 4️⃣ Check existing stages
+    const existingStages = await Stage.find({ eventid: eventId });
+
+    console.log("[SCHEDULE] Existing stages:", existingStages.length);
+
+    if (existingStages.length > 0) {
+      console.log("[SCHEDULE][ERROR] Schedule already exists");
+      return res.status(400).json({
+        message: "Schedule already generated"
+      });
+    }
+
+    // ======================================================
+    // 🟢 KNOCKOUT SCHEDULING
+    // ======================================================
+    if (type === "KNOCKOUT") {
+
+      console.log("[KNOCKOUT] Fetching teams...");
+
+      const teams = await Team.find({ eventid: eventId });
+
+      console.log("[KNOCKOUT] Teams found:", teams.length);
+
+      if (teams.length < 2) {
+        console.log("[KNOCKOUT][ERROR] Not enough teams");
+        return res.status(400).json({
+          message: "At least 2 teams required"
+        });
+      }
+
+      // Shuffle ONCE
+      const shuffledTeams = shuffleArray(teams);
+      const totalTeams = shuffledTeams.length;
+      const baseSize = nearestPowerOfTwo(totalTeams);
+
+      console.log("[KNOCKOUT] Teams shuffled");
+      console.log("[KNOCKOUT] Base size:", baseSize);
+
+      const createdStages = [];
+
+      // -------------------------
+      // PRELIMINARY ROUND
+      // -------------------------
+      if (totalTeams > baseSize) {
+        const prelimMatchCount = totalTeams - baseSize;
+        const prelimTeamsCount = prelimMatchCount * 2;
+
+        console.log("[KNOCKOUT] Preliminary matches:", prelimMatchCount);
+
+        const prelimTeams = shuffledTeams.slice(0, prelimTeamsCount);
+
+        const prelimStage = await Stage.create({
+          eventid: eventId,
+          name: "Preliminary Round",
+          type: "KNOCKOUT",
+          order: 1,
+          teams: prelimTeams.map(t => t._id)
+        });
+
+        console.log("[KNOCKOUT] Preliminary stage created:", prelimStage._id);
+
+        const prelimMatches = [];
+
+        for (let i = 0; i < prelimTeams.length; i += 2) {
+          const teamA = prelimTeams[i];
+          const teamB = prelimTeams[i + 1];
+
+          console.log(
+            `[KNOCKOUT][PRELIM MATCH] ${teamA.teamname} vs ${teamB.teamname}`
+          );
+
+          const match = await Match.create({
+            eventid: eventId,
+            stageid: prelimStage._id,
+            matchType: "KNOCKOUT",
+            teamA: { teamId: teamA._id },
+            teamB: { teamId: teamB._id }
+          });
+
+          prelimMatches.push(match._id);
+        }
+
+        prelimStage.matches = prelimMatches;
+        await prelimStage.save();
+
+        createdStages.push(prelimStage);
+      }
+
+      // -------------------------
+      // MAIN ROUNDS (STAGES)
+      // -------------------------
+      let roundTeams = baseSize;
+      let order = createdStages.length + 1;
+
+      while (roundTeams >= 2) {
+        let name = "";
+
+        if (roundTeams === 2) name = "Final";
+        else if (roundTeams === 4) name = "Semi Final";
+        else if (roundTeams === 8) name = "Quarter Final";
+        else name = `Round of ${roundTeams}`;
+
+        console.log("[KNOCKOUT] Creating stage:", name);
+
+        const stage = await Stage.create({
+          eventid: eventId,
+          name,
+          type: "KNOCKOUT",
+          order
+        });
+
+        createdStages.push(stage);
+
+        roundTeams /= 2;
+        order++;
+      }
+
+      console.log("[KNOCKOUT] Stages created:", createdStages.length);
+
+      // ======================================================
+      // STEP 3: CREATE MATCHES
+      // ======================================================
+      console.log("[KNOCKOUT][STEP 3] Creating matches...");
+
+      const stages = await Stage.find({ eventid: eventId })
+        .sort({ order: 1 });
+
+      const hasPreliminary = createdStages.some(
+        s => s.name === "Preliminary Round"
+      );
+
+      let teamsQueue = [...shuffledTeams];
+
+      for (const stage of stages) {
+
+        console.log("[KNOCKOUT] Processing stage:", stage.name);
+
+        let matches = [];
+
+        // QUARTER FINAL (only if no prelim)
+        if (stage.name === "Quarter Final" && !hasPreliminary) {
+
+          console.log("[KNOCKOUT] Creating Quarter Final matches");
+
+          for (let i = 0; i < teamsQueue.length; i += 2) {
+            const teamA = teamsQueue[i];
+            const teamB = teamsQueue[i + 1];
+
+            console.log(
+              `[QF MATCH] ${teamA.teamname} vs ${teamB.teamname}`
+            );
+
+            const match = await Match.create({
+              eventid: eventId,
+              stageid: stage._id,
+              matchType: "KNOCKOUT",
+              teamA: { teamId: teamA._id },
+              teamB: { teamId: teamB._id }
+            });
+
+            matches.push(match._id);
+          }
+        }
+        // SEMI & FINAL (placeholders)
+        else {
+          const matchCount =
+            stage.name === "Semi Final" ? 2 :
+            stage.name === "Final" ? 1 : 0;
+
+          console.log(
+            `[KNOCKOUT] Creating ${matchCount} placeholder matches for ${stage.name}`
+          );
+
+          for (let i = 0; i < matchCount; i++) {
+            const match = await Match.create({
+              eventid: eventId,
+              stageid: stage._id,
+              matchType: "KNOCKOUT",
+              teamA: { teamId: null },
+              teamB: { teamId: null }
+            });
+
+            matches.push(match._id);
+          }
+        }
+
+        stage.matches = matches;
+        await stage.save();
+
+        console.log(
+          `[KNOCKOUT] ${stage.name} matches created: ${matches.length}`
+        );
+      }
+
+      console.log("[KNOCKOUT] Schedule generation completed");
+
+      return res.status(201).json({
+        message: "Knockout schedule created successfully",
+        stages: createdStages.map(s => ({
+          id: s._id,
+          name: s.name
+        }))
+      });
+    }
+
+    // ======================================================
+    // LEAGUE_FINAL (later)
+    // ======================================================
+    return res.status(200).json({
+      message: "League scheduling will be implemented later"
+    });
+
+  } catch (error) {
+    console.error("[SCHEDULE][CRITICAL]", error);
+    return res.status(500).json({
+      message: "Server error while generating schedule"
+    });
+  }
+});
+
 
 export default router;
