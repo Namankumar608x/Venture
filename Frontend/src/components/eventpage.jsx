@@ -262,6 +262,17 @@ useEffect(() => {
         Loading event...
       </div>
     );
+    ///handleing query msg
+    const handleQueryNavigation = () => {
+  console.log("[EventPage] Navigate to query page, role =", role);
+
+  if (role === "participant") {
+    navigate(`/events/${clubid}/${eventId}/query`);
+  } else {
+    navigate(`/events/${clubid}/${eventId}/queries/admin`);
+  }
+};
+
 
   // -----------------------------------------------------
   // MAIN UI
@@ -277,7 +288,27 @@ useEffect(() => {
           <p className="text-xs text-blue-400 mt-1">Role: {role}</p>
         </div>
         <div className={card}>
-  <h3 className="font-semibold mb-3">Event Roles</h3>
+  <h3 className="font-semibold mb-3">Event Roles</h3><div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+  <div>
+    <h1 className="text-3xl font-bold">{event?.name}</h1>
+    <p className="text-slate-400 text-sm">Event ID: {event?._id}</p>
+    <p className="text-xs text-blue-400 mt-1">Role: {role}</p>
+  </div>
+
+  {/* QUERY / MANAGE BUTTON */}
+  <button
+    onClick={handleQueryNavigation}
+    className={`
+      px-5 py-2 rounded-xl font-medium shadow-md transition
+      ${role === "participant"
+        ? "bg-indigo-600 hover:bg-indigo-700"
+        : "bg-emerald-600 hover:bg-emerald-700"}
+    `}
+  >
+    {role === "participant" ? "Raise a Query" : "Manage Queries"}
+  </button>
+</div>
+
 
   <div className="mb-3">
     <h4 className="text-sm text-blue-400 mb-1">Admins</h4>
