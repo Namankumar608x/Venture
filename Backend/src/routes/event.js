@@ -727,6 +727,76 @@ router.post("/:eventId/schedule", authenticate, async (req, res) => {
         }))
       });
     }
+    // ======================================================
+// 🟢 LEAGUE SCHEDULING (ROUND ROBIN)
+// ======================================================
+if (type === "LEAGUE_FINAL") {
+
+  console.log("[LEAGUE] Fetching teams...");
+
+  const teams = await Team.find({ eventid: eventId });
+
+  console.log("[LEAGUE] Teams found:", teams.length);
+
+  if (teams.length < 2) {
+    console.log("[LEAGUE][ERROR] Not enough teams");
+    return res.status(400).json({
+      message: "At least 2 teams required for league"
+    });
+  }
+
+  // 1️⃣ Create League Stage
+  const leagueStage = await Stage.create({
+    eventid: eventId,
+    name: "League Stage",
+    type: "LEAGUE",
+    order: 1
+  });
+
+  console.log("[LEAGUE] League stage created:", leagueStage._id);
+
+  // 2️⃣ Generate Round Robin Matches
+  const matches = [];
+
+  for (let i = 0; i < teams.length; i++) {
+    for (let j = i + 1; j < teams.length; j++) {
+
+      const teamA = teams[i];
+      const teamB = teams[j];
+
+      console.log(
+        `[LEAGUE MATCH] ${teamA.teamname} vs ${teamB.teamname}`
+      );
+
+      const match = await Match.create({
+        eventid: eventId,
+        stageid: leagueStage._id,
+        matchType: "LEAGUE",
+        teamA: { teamId: teamA._id, score: 0 },
+        teamB: { teamId: teamB._id, score: 0 }
+      });
+
+      matches.push(match._id);
+    }
+  }
+
+  // 3️⃣ Attach matches to stage
+  leagueStage.matches = matches;
+  await leagueStage.save();
+
+  console.log("[LEAGUE] Total matches created:", matches.length);
+
+  return res.status(201).json({
+    message: "League schedule created successfully",
+    stage: {
+      id: leagueStage._id,
+      name: leagueStage.name
+    },
+    totalTeams: teams.length,
+    totalMatches: matches.length
+  });
+}
+
 
     // ======================================================
     // LEAGUE_FINAL (later)
@@ -742,6 +812,154 @@ router.post("/:eventId/schedule", authenticate, async (req, res) => {
     });
   }
 });
+router.put("/matches/:matchId/teams", authenticate, async (req, res) => {
+  const userId = req.user.id;
+  const { matchId } = req.params;
+  const { teamA, teamB } = req.body;
 
+  console.log("=====================================");
+  console.log("[ADMIN] Edit match teams");
+  console.log("[ADMIN] User:", userId);
+  console.log("[ADMIN] Match:", matchId);
+  console.log("[ADMIN] New Teams:", teamA, teamB);
+  console.log("=====================================");
+
+  try {
+    if (!teamA || !teamB) {
+      return res.status(400).json({ message: "Both teams are required" });
+    }
+
+    if (teamA === teamB) {
+      return res.status(400).json({ message: "Teams must be different" });
+    }
+
+    // 1️⃣ Fetch match
+    const match = await Match.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+
+    // 2️⃣ Match must be upcoming
+    if (match.status !== "upcoming") {
+      return res.status(400).json({
+        message: "Cannot edit match after it has started"
+      });
+    }
+
+    // 3️⃣ Fetch event
+    const event = await Event.findById(match.eventid);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+    // 🔒 Schedule lock check
+if (event.isScheduleLocked) {
+  return res.status(403).json({
+    message: "Schedule is locked. Match editing not allowed."
+  });
+}
+
+
+    // 4️⃣ Permission check
+    const isAdmin = event.admin.map(id => id.toString()).includes(userId);
+    const isManager = event.managers.map(id => id.toString()).includes(userId);
+
+    if (!isAdmin && !isManager) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    // 5️⃣ Validate teams belong to this event
+    const teamADoc = await Team.findById(teamA);
+const teamBDoc = await Team.findById(teamB);
+
+if (!teamADoc || !teamBDoc) {
+  return res.status(404).json({ message: "Team not found" });
+}
+
+if (
+  teamADoc.eventid.toString() !== match.eventid.toString() ||
+  teamBDoc.eventid.toString() !== match.eventid.toString()
+) {
+  return res.status(400).json({
+    message: "Teams do not belong to this event"
+  });
+}
+
+
+    // 6️⃣ Update match
+    match.teamA.teamId = teamA;
+    match.teamB.teamId = teamB;
+
+    await match.save();
+
+    console.log("[ADMIN] Match teams updated successfully");
+
+    return res.status(200).json({
+      message: "Match teams updated",
+      matchId: match._id
+    });
+
+  } catch (error) {
+    console.error("[ADMIN][ERROR]", error);
+    return res.status(500).json({
+      message: "Server error while updating match"
+    });
+  }
+});
+
+router.put("/:eventId/lock-schedule", authenticate, async (req, res) => {
+  const userId = req.user.id;
+  const { eventId } = req.params;
+
+  console.log("=====================================");
+  console.log("[LOCK] Schedule lock request");
+  console.log("[LOCK] User:", userId);
+  console.log("[LOCK] Event:", eventId);
+  console.log("=====================================");
+
+  try {
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // Admin only
+    const isAdmin = event.admin.map(id => id.toString()).includes(userId);
+    if (!isAdmin) {
+      return res.status(403).json({ message: "Only admin can lock schedule" });
+    }
+
+    // Schedule must exist
+    const stagesCount = await Stage.countDocuments({ eventid: eventId });
+    if (stagesCount === 0) {
+      return res.status(400).json({
+        message: "Cannot lock schedule before it is generated"
+      });
+    }
+
+    // Already locked?
+    if (event.isScheduleLocked) {
+      return res.status(400).json({
+        message: "Schedule is already locked"
+      });
+    }
+
+    // Lock it
+    event.isScheduleLocked = true;
+    await event.save();
+
+    console.log("[LOCK] Schedule locked successfully");
+
+    return res.status(200).json({
+      message: "Schedule locked successfully",
+      eventId
+    });
+
+  } catch (error) {
+    console.error("[LOCK][ERROR]", error);
+    return res.status(500).json({
+      message: "Server error while locking schedule"
+    });
+  }
+});
 
 export default router;

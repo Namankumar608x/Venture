@@ -54,7 +54,9 @@ users:[{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true}],
                 }
             ]
         }
-    ]
+    ],
+    isScheduleLocked:[ { type: Boolean, default: false }]
+
 },{timestamps:true});
 
 const eventModel=mongoose.model("Event",eventSchema);
