@@ -115,35 +115,34 @@ router.post("/new-team", authenticate, async (req, res) => {
 --------------------------------------------------- */
 router.post("/invite", authenticate, async (req, res) => {
   try {
-    const { teamid,userid } = req.body;
+    const { teamid, userid } = req.body;
     const adminid = req.user.id;
-    const admin=await User.findById(adminid);
-
-    if (!mongoose.Types.ObjectId.isValid(teamid))
-      return res.status(400).json({ message: "Invalid team ID" });
 
     const team = await Team.findById(teamid);
     if (!team) return res.status(404).json({ message: "Team not found" });
 
-    if (team.requests.some((r) => r.user.toString() === userid))
+    if (team.leader.toString() !== adminid)
+      return res.status(403).json({ message: "Only leader can invite" });
+
+    if (team.members.some(id => id.toString() === userid.toString()))
+      return res.status(400).json({ message: "User already a member" });
+
+    if (team.requests.some(r => r.user.toString() === userid.toString()))
       return res.status(400).json({ message: "Already invited" });
 
-    if (team.members.includes(userid))
-      return res.status(400).json({ message: "You are already a member" });
-
     team.requests.push({ user: userid });
-    await team.save();    
+    await team.save();
 
-    const user=await User.findById(userid);
+    const user = await User.findById(userid);
     user.notifications.push({
-      message: `User- "${admin.name}" invited to join team- "${team.teamname}" `,
+      message: `You were invited to join team "${team.teamname}"`,
       requser: adminid,
-      teamid: team._id, // IMPORTANT FIX
-      createdAt: new Date(),
+      teamid: team._id,
     });
+
     await user.save();
 
-    return res.json({ message: "Join invite sent!" });
+    res.json({ message: "Join invite sent!" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
@@ -151,36 +150,40 @@ router.post("/invite", authenticate, async (req, res) => {
 });
 
 
+
 // --------------------------------------------------- */
-router.post("/team/approve-request", authenticate, async (req, res) => {
+// POST /team/accept-request
+router.post("/team/accept-request", authenticate, async (req, res) => {
   try {
+    const userId = req.user.id;
     const { notificationId } = req.body;
-    const leaderId = req.user.id;
 
-    const leader = await User.findById(leaderId);
-    if (!leader) return res.status(404).json({ message: "Leader not found" });
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    const note = leader.notifications.id(notificationId);
+    const note = user.notifications.id(notificationId);
     if (!note) return res.status(404).json({ message: "Notification not found" });
 
-    const { requser, teamid } = note;
-
-    const team = await Team.findById(teamid);
+    const team = await Team.findById(note.teamid);
     if (!team) return res.status(404).json({ message: "Team not found" });
+  const eventid=team.eventid;
+  const event=await Event.findById(eventid);
+  
+   if (!team.members.some(m => m.toString() === userId)) {
+      team.members.push(userId);
+    }
+    if (!user.events.some(e => e.toString() === event._id.toString())) {
+      user.events.push(event._id);
+    }
+    if (event.club && !user.clubs.some(c => c.toString() === event.club.toString())){
+      user.clubs.push(event.club);
+    }
+    note.deleteOne();
 
-    if (team.leader.toString() !== leaderId)
-      return res.status(403).json({ message: "Not authorized" });
-
-    team.members.push(requser);
-    team.requests = team.requests.filter(
-      (r) => r.user.toString() !== requser.toString()
-    );
+    await user.save();
     await team.save();
 
-    note.deleteOne();
-    await leader.save();
-
-    res.json({ message: "User added to team successfully" });
+    res.json({ message: "Joined team successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
@@ -192,26 +195,17 @@ router.post("/team/approve-request", authenticate, async (req, res) => {
 --------------------------------------------------- */
 router.post("/team/reject-request", authenticate, async (req, res) => {
   try {
+    const userId = req.user.id;
     const { notificationId } = req.body;
-    const leaderId = req.user.id;
 
-    const leader = await User.findById(leaderId);
-    if (!leader) return res.status(404).json({ message: "Leader not found" });
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    const note = leader.notifications.id(notificationId);
+    const note = user.notifications.id(notificationId);
     if (!note) return res.status(404).json({ message: "Notification not found" });
 
-    const { requser, teamid } = note;
-
-    const team = await Team.findById(teamid);
-
-    team.requests = team.requests.filter(
-      (r) => r.user.toString() !== requser.toString()
-    );
-    await team.save();
-
     note.deleteOne();
-    await leader.save();
+    await user.save();
 
     res.json({ message: "Request rejected" });
   } catch (err) {
@@ -220,4 +214,70 @@ router.post("/team/reject-request", authenticate, async (req, res) => {
   }
 });
 
+router.post("/remove",authenticate,async(req,res)=>{
+  try {
+     const leaderId=req.user.id;
+     const {teamid,userid}=req.body;
+     const team=await Team.findById(teamid);
+     if (!team)
+      return res.status(404).json({ message: "Team not found" });
+
+       if (team.leader.toString() !== leaderId)
+      return res.status(403).json({ message: "Only leader can remove"});
+ if (userid.toString() === leaderId)
+      return res.status(400).json({ message: "Leader cannot remove himself" });
+
+     const user=await User.findById(userid);
+     if (user) {
+      user.events.pull(team.eventid);
+      await user.save();
+     }
+     if (!team.members.some(id => id.toString() === userid.toString())) {
+      return res.status(400).json({ message: "User is not in team" });
+    }
+    team.members.pull(userid);
+     await team.save();
+     return res.status(200).json({message:"User removed from team"});
+  } catch (error) {
+      console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+router.post("/make-admin", authenticate, async (req, res) => {
+  try {
+    const leaderId = req.user.id;
+    const { teamid, userid } = req.body;
+
+    const team = await Team.findById(teamid);
+    if (!team)
+      return res.status(404).json({ message: "Team not found" });
+
+    // 1. Only current leader can do this
+    if (team.leader.toString() !== leaderId)
+      return res.status(403).json({ message: "Only leader can assign admin" });
+
+    // 2. Cannot assign self
+    if (userid.toString() === leaderId)
+      return res.status(400).json({ message: "You are already the admin" });
+
+    // 3. New admin must be a member
+    if (!team.members.some(id => id.toString() === userid.toString())) {
+      return res.status(400).json({ message: "User is not a team member" });
+    }
+
+    // 4. Transfer leadership
+    team.members.pull(userid);       // remove from members
+    team.members.push(leaderId);     // old leader becomes member
+    team.leader = userid;            // new leader
+
+    await team.save();
+
+    res.status(200).json({
+      message: "Admin role transferred successfully"
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 export default router;

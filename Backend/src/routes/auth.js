@@ -208,7 +208,7 @@ router.post("/:clubid/signup", async (req, res) => {
 /* ----------------------------------------------------------
    USER SEARCH (FOR MANAGERS)
 ----------------------------------------------------------- */
-router.post("/search-users", authenticate, checkmanager, async (req, res) => {
+router.post("/search-users", authenticate, async (req, res) => {
   try {
     const { q } = req.body;
 

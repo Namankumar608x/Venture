@@ -1,358 +1,265 @@
-import React,{useEffect,useState} from "react";
-import axios from "axios";
-import {useNavigate} from "react-router-dom";
-import {jwtDecode} from "jwt-decode";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import axiosInstance from "../utils/axiosInstance";
 
-function Home(){
-  const [adminTournaments,setAdminTournaments]=useState([]);
-  const [participantTournaments,setParticipantTournaments]=useState([]);
-  const [newTournamentName,setNewTournamentName]=useState("");
-  const [joinTournamentId,setJoinTournamentId]=useState("");
-  const [message,setMessage]=useState("");
-  const [isCreating,setIsCreating]=useState(false);
-  const [isJoining,setIsJoining]=useState(false);
-  const [login,setlogin]=useState(false);
-  const navigate=useNavigate();
+function Home() {
+  const navigate = useNavigate();
+
+  const [adminTournaments, setAdminTournaments] = useState([]);
+  const [participantTournaments, setParticipantTournaments] = useState([]);
+  const [newTournamentName, setNewTournamentName] = useState("");
+  const [joinTournamentId, setJoinTournamentId] = useState("");
+  const [message, setMessage] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
 
   useEffect(() => {
-  const token = localStorage.getItem("accessToken");
-  if (token) setlogin(true);
-}, []);
- const refreshAccessToken =async ()=> { 
+    const access = localStorage.getItem("accessToken");
+    const refresh = localStorage.getItem("refreshToken");
+
+    if (!access && !refresh) {
+      navigate("/");
+    }
+  }, [navigate]);
+
+  /* ---------------- FETCH TOURNAMENTS ---------------- */
+
+  const fetchTournaments = async () => {
     try {
-      const refreshToken = localStorage.getItem("refreshToken");
-      if (!refreshToken) return null;
+      setMessage("");
 
-      const response = await fetch("http://localhost:5005/auth/refresh", { 
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      if (!response.ok) {
-        console.warn("Failed to refresh access token");
-        return null;
-      }
-
-      const data = await response.json();
-      localStorage.setItem("accessToken", data.accessToken);
-      return data.accessToken;
-    } catch (err) {
-      console.error("Error refreshing token:", err);
-      return null;
-    }
-  };  
-   const getAuthConfig=async()=>{
-    let token=localStorage.getItem("accessToken");
-    console.log("[getAuthConfig] token:", token);
-    if(!token){
-      setMessage("Please login again, session expired.");
-      return null;
-    }
-    try{
-      const payload = jwtDecode(token);
-      if(payload.exp && Date.now()/1000 > payload.exp){
-        const newToken = await refreshAccessToken();
-        if(!newToken){
-
-         localStorage.removeItem("accessToken");
-      setMessage("Please login again, session expired.");
-        }
-        else{
-          token=newToken;
-          localStorage.setItem("accessToken",token);
-        }
-      }
-    }catch(e){
-      console.warn("[getAuthConfig] jwt decode failed", e);
-      localStorage.removeItem("accessToken");
-      setMessage("Please login again, session expired.");
-      return null;
-    }
-    return{
-      headers:{
-        Authorization:`Bearer ${token}`,
-        "Content-Type":"application/json",
-      },
-    };
-  };
-  const fetchTournaments=async()=>{
-    try{
-      setMessage(""); // clear previous message
-      const config=getAuthConfig();
-      if(!config){
-        console.log("[fetchTournaments] no config, aborting fetch");
-        return;
-      }
-
-      console.log("[fetchTournaments] calling APIs with config", config);
-      const [adminRes,participantRes]=await Promise.all([
-       axios.get("http://localhost:5005/clubs/my-admin", config)
-,
-        axios.get("http://localhost:5005/clubs/participant",config),
+      const [adminRes, participantRes] = await Promise.all([
+        axiosInstance.get("/clubs/my-admin"),
+        axiosInstance.get("/clubs/participant"),
       ]);
 
-      setAdminTournaments(adminRes.data.tournaments||[]);
-      setParticipantTournaments(participantRes.data.tournaments||[]);
-    }catch(err){
-      console.error("[fetchTournaments] error", err);
-      setMessage(err.response?.data?.error||"Failed to load tournaments");
+      setAdminTournaments(adminRes.data.tournaments || []);
+      setParticipantTournaments(participantRes.data.tournaments || []);
+    } catch (err) {
+      console.error("[fetchTournaments]", err);
+      setMessage("Failed to load tournaments");
     }
   };
 
-  useEffect(()=>{
-    // ensure axios uses any stored token as default (optional)
-    const tok = localStorage.getItem("accessToken");
-    if(tok) axios.defaults.headers.common["Authorization"] = `Bearer ${tok}`;
-
+  useEffect(() => {
     fetchTournaments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
+  }, []);
 
-  const handleCreateTournament=async(e)=>{
+  /* ---------------- CREATE TOURNAMENT ---------------- */
+
+  const handleCreateTournament = async (e) => {
     e.preventDefault();
-    console.log("[handleCreateTournament] clicked");
-    if(!newTournamentName.trim()){
+
+    if (!newTournamentName.trim()) {
       setMessage("Tournament name is required");
       return;
     }
+
     setIsCreating(true);
     setMessage("");
-    try{
-      const config=getAuthConfig();
-      if(!config){
-        console.log("[handleCreateTournament] missing config, aborting");
-        setIsCreating(false);
-        return;
-      }
-      const res=await axios.post(
-        "http://localhost:5005/clubs/new",
-        {name:newTournamentName.trim()},
-        config
-      );
-      console.log("[handleCreateTournament] server response", res.data);
-      setMessage("Tournament created successfully");
+
+    try {
+      await axiosInstance.post("/clubs/new", {
+        name: newTournamentName.trim(),
+      });
+
       setNewTournamentName("");
+      setMessage("Tournament created successfully");
       fetchTournaments();
-    }catch(err){
-      console.error("[handleCreateTournament] error",err);
-      setMessage(err.response?.data?.error||"Failed to create tournament");
-    }finally{
+    } catch (err) {
+      console.error("[createTournament]", err);
+      setMessage("Failed to create tournament");
+    } finally {
       setIsCreating(false);
     }
   };
 
-  const handleJoinTournament=async(e)=>{
+  /* ---------------- JOIN TOURNAMENT ---------------- */
+
+  const handleJoinTournament = async (e) => {
     e.preventDefault();
-    console.log("[handleJoinTournament] clicked");
-    if(!joinTournamentId.trim()){
-      setMessage("Tournament ID is required to join");
+
+    if (!joinTournamentId.trim()) {
+      setMessage("Tournament ID is required");
       return;
     }
+
     setIsJoining(true);
     setMessage("");
-    try{
-      const config=getAuthConfig();
-      if(!config){
-        console.log("[handleJoinTournament] missing config, aborting");
-        setIsJoining(false);
-        return;
-      }
-      const res=await axios.post(
-        "http://localhost:5005/clubs/join",
-        {clubId:joinTournamentId.trim()},
-        config
-      );
-      console.log("[handleJoinTournament] server response", res.data);
-      setMessage("Joined tournament successfully");
+
+    try {
+      await axiosInstance.post("/clubs/join", {
+        clubId: joinTournamentId.trim(),
+      });
+
       setJoinTournamentId("");
+      setMessage("Joined tournament successfully");
       fetchTournaments();
-    }catch(err){
-      console.error("[handleJoinTournament] error",err);
-      setMessage(err.response?.data?.error||"Failed to join tournament");
-    }finally{
+    } catch (err) {
+      console.error("[joinTournament]", err);
+      setMessage("Failed to join tournament");
+    } finally {
       setIsJoining(false);
     }
   };
 
-  const handleLogout=()=>{
-  if(!login){
-navigate("/login");
-  }
-  else{
+  /* ---------------- LOGOUT ---------------- */
 
-    localStorage.removeItem("accessToken");
-    delete axios.defaults.headers.common["Authorization"];
-    setlogin(false);
-    setMessage("Please login again");
-    setParticipantTournaments("");
-    
-  }
-    
+  const handleLogout = () => {
+    localStorage.clear();
+    navigate("/");
   };
 
-  return(
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4">
-      {/* background blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-600 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-72 h-72 bg-purple-600 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse delay-700"></div>
-      </div>
+  /* ============================ UI ============================ */
 
-      <div className="w-full max-w-5xl relative z-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-5xl">
+
+        {/* HEADER */}
+        <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
+            <h1 className="text-3xl font-bold text-white">
               Ven<span className="text-blue-500">ture</span> Dashboard
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Create or join tournaments and manage your sports journey.
+            <p className="text-slate-400 text-sm">
+              Create or join tournaments
             </p>
           </div>
-      
+
           <button
             onClick={handleLogout}
-            className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 text-sm border border-slate-700 hover:bg-slate-700 transition"
+            className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700"
           >
-         {login ? "Logout" : "Login"}
-          
+            Logout
           </button>
         </div>
 
-        {/* Main card */}
-        <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 p-6 md:p-8">
+        {/* MAIN CARD */}
+        <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-6">
+
           <div className="grid md:grid-cols-2 gap-8">
-            {/* Create Tournament */}
+            {/* CREATE */}
             <div>
-              <h2 className="text-xl font-semibold text-white mb-2">
-                Create a Tournament
+              <h2 className="text-xl font-semibold text-white mb-3">
+                Create Tournament
               </h2>
-              <p className="text-slate-400 text-sm mb-4">
-                You will become the admin for this tournament.
-              </p>
 
               <form onSubmit={handleCreateTournament} className="space-y-3">
                 <input
-                  type="text"
                   value={newTournamentName}
-                  onChange={(e)=>setNewTournamentName(e.target.value)}
-                  placeholder="Tournament name (e.g. Sports Fest 2025)"
-                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  onChange={(e) => setNewTournamentName(e.target.value)}
+                  placeholder="Tournament name"
+                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
                 />
                 <button
-                  type="submit"
                   disabled={isCreating}
-                  className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-[1.01] transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-sm"
+                  className="w-full py-2 bg-blue-600 rounded-lg text-white"
                 >
-                  {isCreating ? "Creating..." : "Create Tournament"}
+                  {isCreating ? "Creating..." : "Create"}
                 </button>
               </form>
             </div>
 
-            {/* Join Tournament */}
+            {/* JOIN */}
             <div>
-              <h2 className="text-xl font-semibold text-white mb-2">
-                Enter Ongoing Tournament
+              <h2 className="text-xl font-semibold text-white mb-3">
+                Join Tournament
               </h2>
-              <p className="text-slate-400 text-sm mb-4">
-                Enter using a tournament ID shared by the organizer.
-              </p>
 
               <form onSubmit={handleJoinTournament} className="space-y-3">
                 <input
-                  type="text"
                   value={joinTournamentId}
-                  onChange={(e)=>setJoinTournamentId(e.target.value)}
-                  placeholder="Paste Tournament ID here"
-                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                  onChange={(e) => setJoinTournamentId(e.target.value)}
+                  placeholder="Tournament ID"
+                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
                 />
                 <button
-                  type="submit"
                   disabled={isJoining}
-                  className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-100 font-medium rounded-lg border border-slate-600 shadow-sm transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  className="w-full py-2 bg-slate-700 rounded-lg text-white"
                 >
-                  {isJoining ? "Joining..." : "Join Tournament"}
+                  {isJoining ? "Joining..." : "Join"}
                 </button>
               </form>
             </div>
           </div>
 
-          {/* Message */}
+          {/* MESSAGE */}
           {message && (
-            <div className="mt-6">
-              <div className="p-3 rounded-lg text-sm text-center bg-slate-800/70 border border-slate-700 text-slate-100">
-                {message}
-              </div>
+            <div className="mt-6 p-3 bg-slate-800 border border-slate-700 rounded text-center text-white">
+              {message}
             </div>
           )}
 
-          {/* Lists */}
+          {/* LISTS */}
           <div className="mt-8 grid md:grid-cols-2 gap-6">
-            {/* Admin tournaments */}
+            {/* ADMIN */}
             <div>
               <h3 className="text-lg font-semibold text-white mb-2">
                 Your Tournaments (Admin)
               </h3>
-              {adminTournaments.length===0?(
+
+              {adminTournaments.length === 0 ? (
                 <p className="text-slate-500 text-sm">
-                  You are not admin of any tournaments yet.
+                  No admin tournaments
                 </p>
-              ):(
-                <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                  {adminTournaments.map(t=>(
-                    <div
-                      key={t._id}
-                      className="bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3 flex justify-between items-center text-sm text-slate-100"
-                    >
-                      <div>
-                        <div className="font-medium">
-                          {t.name || "Unnamed Tournament"}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          ID: {t._id}
-                        </div>
+              ) : (
+                adminTournaments.map((t) => (
+                  <div
+                    key={t._id}
+                    className="bg-slate-800 p-3 rounded-lg flex justify-between mb-2"
+                  >
+                    <div>
+                      <div className="font-medium text-white">
+                        {t.name}
                       </div>
-                      {/* later this button can go to tournament dashboard */}
-                      <button onClick={() => navigate(`/events/${t._id}`)} className="text-xs px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white">
-                        Open
-                      </button>
+                      <div className="text-xs text-slate-400">
+                        {t._id}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                    <button
+                      onClick={() => navigate(`/events/${t._id}`)}
+                      className="px-3 py-1 bg-blue-600 rounded text-sm"
+                    >
+                      Open
+                    </button>
+                  </div>
+                ))
               )}
             </div>
 
-            {/* Participant tournaments */}
+            {/* PARTICIPANT */}
             <div>
               <h3 className="text-lg font-semibold text-white mb-2">
-                Tournaments You Joined
+                Joined Tournaments
               </h3>
-              {participantTournaments.length===0?(
+
+              {participantTournaments.length === 0 ? (
                 <p className="text-slate-500 text-sm">
-                  You haven't joined any tournaments yet.
+                  No joined tournaments
                 </p>
-              ):(
-                <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                  {participantTournaments.map(t=>(
-                    <div
-                      key={t._id}
-                      className="bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3 flex justify-between items-center text-sm text-slate-100"
-                    >
-                      <div>
-                        <div className="font-medium">
-                          {t.name || "Unnamed Tournament"}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          ID: {t._id}
-                        </div>
+              ) : (
+                participantTournaments.map((t) => (
+                  <div
+                    key={t._id}
+                    className="bg-slate-800 p-3 rounded-lg flex justify-between mb-2"
+                  >
+                    <div>
+                      <div className="font-medium text-white">
+                        {t.name}
                       </div>
-                      <button onClick={() => navigate(`/events/${t._id}`)} className="text-xs px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100">
-                        View
-                      </button>
+                      <div className="text-xs text-slate-400">
+                        {t._id}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                    <button
+                      onClick={() => navigate(`/events/${t._id}`)}
+                      className="px-3 py-1 bg-slate-700 rounded text-sm"
+                    >
+                      View
+                    </button>
+                  </div>
+                ))
               )}
             </div>
           </div>
