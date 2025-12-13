@@ -162,7 +162,9 @@ useEffect(() => {
     fetchEvent();
   }, [eventId]);
 
- 
+ const handleEditEvent = () => {
+  navigate(`/events/${clubid}/${eventId}/edit`);
+};
   const postAction = async (url, body, successMsg) => {
     try {
       const config = getAuthConfig();
@@ -307,6 +309,15 @@ useEffect(() => {
   >
     {role === "participant" ? "Raise a Query" : "Manage Queries"}
   </button>
+   {/* EDIT EVENT (only admin / manager) */}
+  {role !== "participant" && (
+    <button
+      onClick={handleEditEvent}
+      className="px-5 py-2 rounded-xl font-medium bg-yellow-600 hover:bg-yellow-700 shadow-md transition"
+    >
+      Edit Event Details
+    </button>
+  )}
 </div>
 
 
@@ -429,8 +440,9 @@ useEffect(() => {
               </form>
             )}
           </div>
+          
 
-          {/* ---------------- TEAMS ---------------- */}
+              {/* ---------------- TEAMS ---------------- */}
    <div className={card}>
   <h2 className="text-xl font-semibold mb-4">Teams</h2>
     <h3 className="text-lg font-semibold text-green-400 mb-2">Max team length: {event?.maxPlayer}</h3>
@@ -465,13 +477,7 @@ useEffect(() => {
             </button>
           </form>
 
-          {/* Join team button */}
-          <button
-            onClick={() => navigate(`/events/${clubid}/${eventId}/teams`)}
-            className="px-3 py-2 w-full bg-emerald-600 rounded-lg text-sm"
-          >
-            Browse & Join Teams
-          </button>
+         
         </div>
       );
     }
@@ -547,6 +553,62 @@ useEffect(() => {
       ))
   )}
 </div>
+        
+</div>
+        {/* ---------------- ADMIN PANEL ---------------- */}
+        {role !== "participant" && (
+          <div className="grid lg:grid-cols-3 gap-6">
+
+            {/* Promote */}
+            <div className={card}>
+              <h3 className="font-semibold mb-2">Promote User</h3>
+              <form onSubmit={handlePromote} className="space-y-2">
+               <input
+  className={input}
+  placeholder="Search username or email"
+  value={searchQuery}
+  onChange={(e) => {
+    setSearchQuery(e.target.value);
+    setPromoteForm({
+      ...promoteForm,
+      userid: e.target.value,   // still store input
+    });
+  }}
+/>
+{searchResults.length > 0 && (
+  <div className="mt-1 bg-gray-800 rounded-lg p-2 max-h-48 overflow-y-auto">
+    {searchResults.map((u) => (
+      <div
+        key={u._id}
+        className="p-2 hover:bg-gray-700 cursor-pointer rounded-md"
+        onClick={() => {
+          setPromoteForm({ ...promoteForm, userid: u._id });
+          setSearchQuery(u.username || u.email);
+          setSearchResults([]);
+        }}
+      >
+        <p className="text-sm font-semibold">{u.username}</p>
+        <p className="text-xs text-gray-400">{u.email}</p>
+      </div>
+    ))}
+  </div>
+)}
+
+                <select
+                  className={input}
+                  value={promoteForm.post}
+                  onChange={(e) =>
+                    setPromoteForm({ ...promoteForm, post: e.target.value })
+                  }
+                >
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <button className="px-3 py-2 bg-blue-600 rounded-lg w-full">
+                  Promote
+                </button>
+              </form>
+            </div>
 
             {/* Updates */}
             <div className={card}>
@@ -629,6 +691,7 @@ useEffect(() => {
             </div>
           </div>
         )
+      }
 
         {/* ---------------- UPDATES ---------------- */}
         <div className={card}>
@@ -662,12 +725,9 @@ useEffect(() => {
         {message && (
           <div className="p-3 rounded bg-slate-700 text-center">{message}</div>
         )}
-        <button onClick={() => navigate(`/events/${clubid}/${eventId}/queries/admin`)}>
-  Manage Queries
-</button>
+     
       </div>
-      
-
     </div>
+   
   );
 }
