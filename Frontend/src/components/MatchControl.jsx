@@ -11,11 +11,16 @@ export default function MatchControl(){
     headers:{Authorization:`Bearer ${localStorage.getItem("accessToken")}`}
   });
 
-  useEffect(()=>{
-    axios.get(
-      `http://localhost:5005/matches/${matchId}`,
+  const fetchMatch=async()=>{
+    const res=await axios.get(
+      `http://localhost:5005/events/matches/${matchId}`,
       auth()
-    ).then(res=>setMatch(res.data));
+    );
+    setMatch(res.data);
+  };
+
+  useEffect(()=>{
+    fetchMatch();
   },[matchId]);
 
   const updateStatus=async()=>{
@@ -24,19 +29,22 @@ export default function MatchControl(){
       {status:"finished"},
       auth()
     );
-    alert("Match finished");
+    await fetchMatch(); // 🔄 auto refresh
   };
 
   const declareWinner=async()=>{
+    if(!winner)return alert("Select winner");
+
     await axios.put(
       `http://localhost:5005/events/${matchId}/result`,
-      {winnerTeamId:winner},
+      {winnerTeamId:winner,decidedBy:"NORMAL"},
       auth()
     );
-    alert("Winner declared");
+
+    await fetchMatch(); // 🔄 auto refresh
   };
 
-  if(!match) return null;
+  if(!match)return null;
 
   const card="bg-slate-800 border border-slate-700 rounded-xl p-5";
 
@@ -46,7 +54,9 @@ export default function MatchControl(){
         <h2 className="text-xl font-bold mb-4">Match Control</h2>
 
         <p className="mb-2">
-          {match.teamA?.teamId?.teamname} vs {match.teamB?.teamId?.teamname}
+          {match.teamA?.teamId?.teamname || "TBD"}
+          {" vs "}
+          {match.teamB?.teamId?.teamname || "TBD"}
         </p>
 
         <p className="text-sm text-slate-400 mb-4">
@@ -55,7 +65,8 @@ export default function MatchControl(){
 
         <button
           onClick={updateStatus}
-          className="px-4 py-2 bg-yellow-600 rounded-lg mr-3"
+          disabled={match.status==="finished"}
+          className="px-4 py-2 bg-yellow-600 rounded-lg mr-3 disabled:opacity-50"
         >
           Finish Match
         </button>
@@ -65,17 +76,24 @@ export default function MatchControl(){
           className="bg-slate-700 p-2 rounded-lg mr-2"
         >
           <option value="">Select Winner</option>
-          <option value={match.teamA.teamId._id}>
-            {match.teamA.teamId.teamname}
-          </option>
-          <option value={match.teamB.teamId._id}>
-            {match.teamB.teamId.teamname}
-          </option>
+
+          {match.teamA?.teamId && (
+            <option value={match.teamA.teamId._id}>
+              {match.teamA.teamId.teamname}
+            </option>
+          )}
+
+          {match.teamB?.teamId && (
+            <option value={match.teamB.teamId._id}>
+              {match.teamB.teamId.teamname}
+            </option>
+          )}
         </select>
 
         <button
           onClick={declareWinner}
-          className="px-4 py-2 bg-emerald-600 rounded-lg"
+          disabled={match.status!=="finished"}
+          className="px-4 py-2 bg-emerald-600 rounded-lg disabled:opacity-50"
         >
           Declare Winner
         </button>

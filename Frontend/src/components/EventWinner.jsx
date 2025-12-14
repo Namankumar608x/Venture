@@ -11,11 +11,14 @@ export default function EventWinner(){
   });
 
   useEffect(()=>{
-    axios.get(
-      `http://localhost:5005/events/${eventId}`,
-      auth()
-    ).then(res=>setWinner(res.data.event.winnerTeam));
-  },[eventId]);
+  axios.get(
+    `http://localhost:5005/events/${eventId}/winner`,
+    auth()
+  ).then(res=>{
+    setWinner(res.data.winner);
+  });
+},[eventId]);
+
 
   return(
     <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">

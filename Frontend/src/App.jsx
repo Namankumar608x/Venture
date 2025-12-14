@@ -108,17 +108,25 @@ export default function App() {
   </ProtectedRoute>
 } />
 
-<Route path="/events/:clubid/:eventId/match/:matchId" element={
-  <ProtectedRoute>
-    <Layout><MatchControl /></Layout>
-  </ProtectedRoute>
-} />
+
 
 <Route path="/events/:clubid/:eventId/winner" element={
   <ProtectedRoute>
     <Layout><EventWinner /></Layout>
   </ProtectedRoute>
 } />
+
+<Route
+  path="/events/:clubid/:eventId/matches/:matchId"
+  element={
+    <ProtectedRoute>
+      <Layout>
+        <MatchControl />
+      </Layout>
+    </ProtectedRoute>
+  }
+/>
+
 
 
   <Route path="*" element={<Login />} />
