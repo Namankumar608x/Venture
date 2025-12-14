@@ -118,6 +118,7 @@ router.post("/invite", authenticate, async (req, res) => {
     const { teamid, userid } = req.body;
     const adminid = req.user.id;
 
+
     const team = await Team.findById(teamid);
     if (!team) return res.status(404).json({ message: "Team not found" });
 
@@ -129,11 +130,21 @@ router.post("/invite", authenticate, async (req, res) => {
 
     if (team.requests.some(r => r.user.toString() === userid.toString()))
       return res.status(400).json({ message: "Already invited" });
+   const existingTeam = await Team.findOne({
+      eventid: team.eventid,
+      members: userid
+    });
 
+    if (existingTeam) {
+      return res.status(400).json({
+        message: "User is already part of another team in this event"
+      });
+    }
     team.requests.push({ user: userid });
     await team.save();
 
     const user = await User.findById(userid);
+
     user.notifications.push({
       message: `You were invited to join team "${team.teamname}"`,
       requser: adminid,
@@ -178,6 +189,16 @@ router.post("/team/accept-request", authenticate, async (req, res) => {
     if (event.club && !user.clubs.some(c => c.toString() === event.club.toString())){
       user.clubs.push(event.club);
     }
+    const alreadyInTeam = await Team.findOne({
+  eventid: team.eventid,
+  members: userId
+});
+
+if (alreadyInTeam) {
+  return res.status(400).json({
+    message: "You already joined another team in this event"
+  });
+}
     note.deleteOne();
 
     await user.save();
