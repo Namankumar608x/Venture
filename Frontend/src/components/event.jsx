@@ -28,6 +28,42 @@ const FRONTEND_URL="localhost:5173";
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     fetchClubs();
   }, []);
+  const leaveClub = async (clubId) => {
+  if (!window.confirm("Are you sure you want to leave this club?")) return;
+
+  try {
+    const config = getAuthConfig();
+    if (!config) return;
+
+    await axios.post(
+      "http://localhost:5005/clubs/leave",
+      { clubid: clubId },
+      config
+    );
+
+    fetchClubs(); // refresh lists
+  } catch (err) {
+    alert(err.response?.data?.message || "Failed to leave club");
+  }
+};
+ const deleteClub = async (clubId) => {
+  if (!window.confirm("Are you sure you want to delete this club? This action cannot be reversed!!")) return;
+   
+  try {
+    const config = getAuthConfig();
+    if (!config) return;
+
+    await axios.post(
+      "http://localhost:5005/clubs/delete",
+      { clubid: clubId },
+      config
+    );
+
+    fetchClubs();
+  } catch (err) {
+    alert(err.response?.data?.message || "Failed to delete club");
+  }
+};
 
   const getAuthConfig = () => {
     const token = localStorage.getItem("accessToken");
@@ -316,6 +352,7 @@ setClubEvents(updatedEvents);
                     className="flex-1 px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                     id="openEventId"
                   />
+                 
                   <button
                     onClick={() => {
                       const val = document
@@ -388,7 +425,9 @@ setClubEvents(updatedEvents);
                         <div className="text-xs text-slate-400">
                           ID: {c._id || c.id}
                         </div>
-                      </div>
+                      </div> <button onClick={()=>{deleteClub}} className="text-xs px-3 py-1 rounded-md bg-red-600 hover:bg-blue-500 text-white">
+          Delete
+        </button> 
                       <button
                         onClick={() => setSelectedClub(c._id || c.id)}
                         className="text-xs px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white"
@@ -424,6 +463,9 @@ setClubEvents(updatedEvents);
                           ID: {c._id || c.id}
                         </div>
                       </div>
+                      <button onClick={()=>{leaveClub}} className="text-xs px-3 py-1 rounded-md bg-red-700 hover:bg-slate-600 text-slate-10">
+         Leave
+        </button> 
                       <button
                         onClick={() => setSelectedClub(c._id || c.id)}
                         className="text-xs px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100"

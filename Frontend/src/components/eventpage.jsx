@@ -209,6 +209,7 @@ useEffect(() => {
     );    
   setTeamForm({ teamname: "" });
     await fetchteams();
+    await fetchEvent();
   };
 
   const sendJoinRequest = (teamId) => {
@@ -569,7 +570,7 @@ useEffect(() => {
         <div className="flex justify-between items-center">
           <p className="font-medium text-lg">{myTeam.teamname}</p>
 
-          {myTeam.leader?._id === currentUser && (
+          {myTeam.leader?._id === currentUser ? (
             <button
               onClick={() =>
                 navigate(`/events/${clubid}/${eventId}/team/${myTeam._id}`)
@@ -577,6 +578,15 @@ useEffect(() => {
               className="px-2 py-1 text-xs bg-blue-600 rounded"
             >
               Manage Team
+            </button>
+          ):(
+ <button
+              onClick={() =>
+                navigate(`/events/${clubid}/${eventId}/team/${myTeam._id}`)
+              }
+              className="px-2 py-1 text-xs bg-blue-600 rounded"
+            >
+             View Team
             </button>
           )}
         </div>
@@ -734,7 +744,7 @@ useEffect(() => {
                   }
                 >
                   <option value="">Team A</option>
-                  {event.teams.map((t) => (
+                  {event.teams .filter((t) => t.isRegistered).map((t) => (
                     <option key={t._id} value={t._id}>
                       {t.teamname}
                     </option>
@@ -749,7 +759,7 @@ useEffect(() => {
                   }
                 >
                   <option value="">Team B</option>
-                  {event.teams.map((t) => (
+                  {event.teams .filter((t) => t.isRegistered).map((t) => (
                     <option key={t._id} value={t._id}>
                       {t.teamname}
                     </option>

@@ -10,8 +10,6 @@ import Schedule from "../models/schedule.js";
 import {checkadmin,checkmanager} from "../middlewares/roles.js";
 import QueryMessage from "../models/QueryMessage.js";
 import Stage from "../models/stages.js";
-
-
 // Utility: shuffle array (Fisher-Yates)
 const shuffleArray = (arr) => {
   const a = [...arr];
