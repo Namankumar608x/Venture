@@ -209,6 +209,7 @@ useEffect(() => {
     );    
   setTeamForm({ teamname: "" });
     await fetchteams();
+    await fetchEvent();
   };
 
   const sendJoinRequest = (teamId) => {
@@ -743,7 +744,7 @@ useEffect(() => {
                   }
                 >
                   <option value="">Team A</option>
-                  {event.teams.map((t) => (
+                  {event.teams .filter((t) => t.isRegistered).map((t) => (
                     <option key={t._id} value={t._id}>
                       {t.teamname}
                     </option>
@@ -758,7 +759,7 @@ useEffect(() => {
                   }
                 >
                   <option value="">Team B</option>
-                  {event.teams.map((t) => (
+                  {event.teams .filter((t) => t.isRegistered).map((t) => (
                     <option key={t._id} value={t._id}>
                       {t.teamname}
                     </option>

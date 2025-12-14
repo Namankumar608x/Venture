@@ -4,7 +4,7 @@ import api from "../utils/axiosInstance";
 import axios from "axios";
 
 export default function TeamManagePage() {
-  const { eventId, teamid } = useParams();
+  const {clubid, eventId, teamid } = useParams();
   const navigate = useNavigate();
 
   const [team, setTeam] = useState(null);
@@ -119,13 +119,22 @@ export default function TeamManagePage() {
   };
 
   const proceedToRegister = async () => {
-    const ok = window.confirm(
+    try {
+      const ok = window.confirm(
       "⚠️ Final Registration Warning\n\nAfter proceeding:\n• Team cannot be edited\n• Members cannot be changed\n\nContinue?"
     );
     if (!ok) return;
 
-    const res = await api.post("/teams/proceed-register", { teamid });
-    window.location.href = res.data.paymentUrl;
+    const res = await api.post("/teams/register", { teamid });
+    if(res.status===200){
+      console.log("response is ok");
+       navigate(`/events/${clubid}/${eventId}`);
+    }
+    } catch (error) {
+      console.log(error);
+    }
+    
+   
   };
 
   if (!team) return null;

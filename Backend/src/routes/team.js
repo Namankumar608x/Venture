@@ -378,8 +378,30 @@ router.post("/dismantle", authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
+});
+router.post("/register",authenticate,async(req,res)=>{
+try {
+  const {teamid}=req.body;
+  const leaderid=req.user.id;
+  const team = await Team.findById(teamid);
+    if (!team)
+      return res.status(404).json({ message: "Team not found" });
+
+    if (team.leader.toString() !== leaderid) {
+      return res
+        .status(403)
+        .json({ message: "Only team leader can register team" });
+    }
+    team.isRegistered=true;
+    await team.save();
+    return res.status(200).json({message:"Team registered"});
+
+} catch (error) {
+   console.error(error);
+    return res.status(500).json({ message: "Server error" });
+}
 });
 
 export default router;
