@@ -14,9 +14,10 @@ export default function EventBracket(){
 
   useEffect(()=>{
     axios.get(
-      `http://localhost:5005/stages/${eventId}`,
-      auth()
-    ).then(res=>setStages(res.data));
+  `http://localhost:5005/events/${eventId}/stages`,
+  auth()
+).then(res=>setStages(res.data));
+    
   },[eventId]);
 
   const card="bg-slate-800/60 border border-slate-700 rounded-xl p-4";

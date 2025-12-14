@@ -1214,4 +1214,129 @@ if (match.matchType === "KNOCKOUT") {
   }
 });
 
+
+/**
+ * GET all stages with matches for an event
+ */
+router.get("/:eventId", authenticate, async (req, res) => {
+  const { eventId } = req.params;
+
+  console.log("=====================================");
+  console.log("[STAGES] Fetch stages for event");
+  console.log("[STAGES] Event:", eventId);
+  console.log("=====================================");
+
+  try {
+    const stages = await Stage.find({ eventid: eventId })
+      .sort({ order: 1 })
+      .populate({
+        path: "matches",
+        populate: [
+          {
+            path: "teamA.teamId",
+            select: "teamname"
+          },
+          {
+            path: "teamB.teamId",
+            select: "teamname"
+          }
+        ]
+      });
+
+    console.log("[STAGES] Stages found:", stages.length);
+
+    return res.status(200).json(stages);
+  } catch (error) {
+    console.error("[STAGES][ERROR]", error);
+    return res.status(500).json({
+      message: "Failed to fetch stages"
+    });
+  }
+});
+
+// ---------------------------------------------------
+// GET STAGES + MATCHES FOR EVENT (READ API)
+// ---------------------------------------------------
+router.get("/:eventId/stages", authenticate, async (req, res) => {
+  const { eventId } = req.params;
+
+  console.log("=====================================");
+  console.log("[STAGES] Fetch stages for event");
+  console.log("[STAGES] Event:", eventId);
+  console.log("=====================================");
+
+  try {
+    const stages = await Stage.find({ eventid: eventId })
+      .sort({ order: 1 })
+      .populate({
+        path: "matches",
+        populate: [
+          {
+            path: "teamA.teamId",
+            select: "teamname"
+          },
+          {
+            path: "teamB.teamId",
+            select: "teamname"
+          }
+        ]
+      });
+
+    console.log("[STAGES] Stages found:", stages.length);
+
+    return res.status(200).json(stages);
+  } catch (error) {
+    console.error("[STAGES][ERROR]", error);
+    return res.status(500).json({
+      message: "Failed to fetch stages"
+    });
+  }
+});
+// GET SINGLE MATCH
+router.get("/matches/:matchId", authenticate, async (req,res)=>{
+  const { matchId } = req.params;
+
+  console.log("[MATCH READ] Fetch match:", matchId);
+
+  try {
+    const match = await Match.findById(matchId)
+      .populate("teamA.teamId","teamname")
+      .populate("teamB.teamId","teamname");
+
+    if(!match){
+      return res.status(404).json({message:"Match not found"});
+    }
+
+    return res.json(match);
+  } catch(err){
+    console.error("[MATCH READ ERROR]",err);
+    return res.status(500).json({message:"Server error"});
+  }
+});
+
+// GET FINAL WINNER
+router.get("/:eventId/winner", authenticate, async (req,res)=>{
+  const { eventId } = req.params;
+
+  const finalStage = await Stage.findOne({
+    eventid:eventId,
+    name:"Final"
+  }).populate({
+    path:"matches",
+    populate:[
+      {path:"winner",select:"teamname"}
+    ]
+  });
+
+  if(!finalStage || finalStage.matches.length===0){
+    return res.json({winner:null});
+  }
+
+  const finalMatch = finalStage.matches[0];
+
+  return res.json({
+    winner: finalMatch.winner
+  });
+});
+
 export default router;
