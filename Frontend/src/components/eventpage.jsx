@@ -569,7 +569,7 @@ useEffect(() => {
         <div className="flex justify-between items-center">
           <p className="font-medium text-lg">{myTeam.teamname}</p>
 
-          {myTeam.leader?._id === currentUser && (
+          {myTeam.leader?._id === currentUser ? (
             <button
               onClick={() =>
                 navigate(`/events/${clubid}/${eventId}/team/${myTeam._id}`)
@@ -577,6 +577,15 @@ useEffect(() => {
               className="px-2 py-1 text-xs bg-blue-600 rounded"
             >
               Manage Team
+            </button>
+          ):(
+ <button
+              onClick={() =>
+                navigate(`/events/${clubid}/${eventId}/team/${myTeam._id}`)
+              }
+              className="px-2 py-1 text-xs bg-blue-600 rounded"
+            >
+             View Team
             </button>
           )}
         </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../utils/axiosInstance";
+import axios from "axios";
 
 export default function TeamManagePage() {
   const { eventId, teamid } = useParams();
@@ -12,6 +13,7 @@ export default function TeamManagePage() {
   const [maxlength, setMaxlength] = useState(1);
   const [editingName, setEditingName] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
+  const [currentUser, setCurrentUser] = useState("");
 
   /* -----------------------------------------------------------
         FETCH EVENT
@@ -19,6 +21,7 @@ export default function TeamManagePage() {
   const fetchEvent = async () => {
     const res = await api.get(`/events/${eventId}`);
     setMaxlength(res.data.event.maxPlayer);
+    console.log(maxlength);
   };
 
   /* -----------------------------------------------------------
@@ -29,6 +32,17 @@ export default function TeamManagePage() {
     setTeam(res.data);
     setNewTeamName(res.data.teamname);
   };
+
+  /* -----------------------------------------------------------
+        AUTH
+  ------------------------------------------------------------ */
+  useEffect(() => {
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      setCurrentUser(payload.id);
+    }
+  }, []);
 
   useEffect(() => {
     fetchEvent();
@@ -44,14 +58,12 @@ export default function TeamManagePage() {
         setSearchResults([]);
         return;
       }
-       console.log(searchQuery);
 
       try {
         const res = await api.post("/auth/search-users", {
-            q: searchQuery,
+          q: searchQuery,
         });
         setSearchResults(res.data);
-        console.log(res.data.username);
       } catch {
         setSearchResults([]);
       }
@@ -65,7 +77,7 @@ export default function TeamManagePage() {
   ------------------------------------------------------------ */
 
   const inviteUser = async (userid) => {
-    await api.post("/teams/invite", { teamid,userid });
+    await api.post("/teams/invite", { teamid, userid });
     alert("Invite sent");
   };
 
@@ -80,7 +92,7 @@ export default function TeamManagePage() {
   };
 
   const updateTeamName = async () => {
-    await api.post("/teams/edit-name", { teamid, name: newTeamName });
+    await api.put("/teams/edit", { teamid, name: newTeamName });
     setEditingName(false);
     fetchTeam();
   };
@@ -93,16 +105,26 @@ export default function TeamManagePage() {
     navigate(`/events/${eventId}`);
   };
 
+  const leaveTeam = async () => {
+    try {
+      await axios.post(
+        "http://localhost:5005/teams/leave",
+        { teamid },
+        { headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` } }
+      );
+      navigate(`/events/${eventId}`);
+    } catch (err) {
+      alert(err.response?.data?.message);
+    }
+  };
+
   const proceedToRegister = async () => {
     const ok = window.confirm(
       "⚠️ Final Registration Warning\n\nAfter proceeding:\n• Team cannot be edited\n• Members cannot be changed\n\nContinue?"
     );
     if (!ok) return;
 
-    // backend will create razorpay order later
     const res = await api.post("/teams/proceed-register", { teamid });
-
-    // 🔗 redirect to razorpay (placeholder)
     window.location.href = res.data.paymentUrl;
   };
 
@@ -110,7 +132,7 @@ export default function TeamManagePage() {
 
   const leaderId =
     team.leader?._id?.toString() || team.leader?.toString();
-
+  const isLeader = leaderId === currentUser;
   const isRegistered = team.isRegistered;
 
   return (
@@ -125,7 +147,10 @@ export default function TeamManagePage() {
               onChange={(e) => setNewTeamName(e.target.value)}
               className="bg-slate-900 p-2 rounded"
             />
-            <button onClick={updateTeamName} className="bg-green-600 px-3 rounded">
+            <button
+              onClick={updateTeamName}
+              className="bg-green-600 px-3 rounded"
+            >
               Save
             </button>
           </div>
@@ -133,7 +158,7 @@ export default function TeamManagePage() {
           <h1 className="text-2xl font-bold">{team.teamname}</h1>
         )}
 
-        {!isRegistered && (
+        {!isRegistered && isLeader && (
           <button
             onClick={() => setEditingName(true)}
             className="text-sm text-blue-400"
@@ -154,13 +179,16 @@ export default function TeamManagePage() {
 
       {team.members.map((m) => {
         const memberId = m._id.toString();
-        const isLeader = memberId === leaderId;
+        const memberIsLeader = memberId === leaderId;
 
         return (
-          <div key={m._id} className="bg-slate-800 p-2 rounded flex justify-between mt-2">
+          <div
+            key={m._id}
+            className="bg-slate-800 p-2 rounded flex justify-between mt-2"
+          >
             <span>{m.username || m.name}</span>
 
-            {!isRegistered && !isLeader && (
+            {!isRegistered && isLeader && !memberIsLeader && (
               <div className="flex gap-2">
                 <button
                   onClick={() => removeUser(m._id)}
@@ -177,15 +205,17 @@ export default function TeamManagePage() {
               </div>
             )}
 
-            {isLeader && (
-              <span className="text-xs bg-red-600 px-2 rounded">Leader</span>
+            {memberIsLeader && (
+              <span className="text-xs bg-red-600 px-2 rounded">
+                Leader
+              </span>
             )}
           </div>
         );
       })}
 
-      {/* INVITE */}
-      {!isRegistered && team.members.length < maxlength && (
+      {/* INVITE USERS */}
+      {!isRegistered && isLeader && team.members.length < maxlength && (
         <>
           <h3 className="mt-6 font-semibold">Invite Players</h3>
           <input
@@ -196,7 +226,10 @@ export default function TeamManagePage() {
           />
 
           {searchResults.map((u) => (
-            <div key={u._id} className="flex justify-between mt-2 bg-slate-800 p-2 rounded">
+            <div
+              key={u._id}
+              className="flex justify-between mt-2 bg-slate-800 p-2 rounded"
+            >
               <span>{u.username}</span>
               <button
                 onClick={() => inviteUser(u._id)}
@@ -212,19 +245,30 @@ export default function TeamManagePage() {
       {/* FINAL ACTIONS */}
       {!isRegistered && (
         <div className="mt-8 flex gap-4">
-          <button
-            onClick={proceedToRegister}
-            className="bg-purple-600 px-4 py-2 rounded"
-          >
-            Proceed to Register
-          </button>
+          {isLeader ? (
+            <>
+              <button
+                onClick={proceedToRegister}
+                className="bg-purple-600 px-4 py-2 rounded"
+              >
+                Proceed to Register
+              </button>
 
-          <button
-            onClick={dismantleTeam}
-            className="bg-red-700 px-4 py-2 rounded"
-          >
-            Dismantle Team
-          </button>
+              <button
+                onClick={dismantleTeam}
+                className="bg-red-700 px-4 py-2 rounded"
+              >
+                Dismantle Team
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={leaveTeam}
+              className="bg-red-600 px-4 py-2 rounded"
+            >
+              Leave Team
+            </button>
+          )}
         </div>
       )}
 

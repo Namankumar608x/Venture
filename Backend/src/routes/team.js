@@ -213,7 +213,25 @@ router.post("/team/reject-request", authenticate, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+router.put("/edit",authenticate,async(req,res)=>{
+try {
+  const {teamid,name}=req.body;
+  const userid=req.user.id;
+  const team=await Team.findById(teamid);
+     if (!team)
+      return res.status(404).json({ message: "Team not found" });
+  if (team.leader.toString() !== userid)
+      return res.status(403).json({ message: "Only leader can edit team settings"});
+  team.teamname=name;
+  await team.save();
+  return res.status(200).json({message:"Team name changed"});
 
+
+} catch (err) {
+  console.error(err);
+    res.status(500).json({ message: "Server error" });
+}
+});
 router.post("/remove",authenticate,async(req,res)=>{
   try {
      const leaderId=req.user.id;
@@ -240,6 +258,47 @@ router.post("/remove",authenticate,async(req,res)=>{
      return res.status(200).json({message:"User removed from team"});
   } catch (error) {
       console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+router.post("/leave", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { teamid } = req.body;
+
+    const team = await Team.findById(teamid);
+    if (!team)
+      return res.status(404).json({ message: "Team not found" });
+
+    // 1. Leader cannot leave directly
+    if (team.leader.toString() === userId) {
+      return res.status(400).json({
+        message: "Leader cannot leave team. Transfer leadership or delete team.",
+      });
+    }
+
+    // 2. Check if user is a member
+    if (!team.members.some(id => id.toString() === userId)) {
+      return res.status(400).json({ message: "You are not a member of this team" });
+    }
+
+    // 3. Remove user from team
+    team.members.pull(userId);
+    await team.save();
+
+    // 4. Remove event from user.events
+    const user = await User.findById(userId);
+    if (user) {
+      user.events.pull(team.eventid);
+      await user.save();
+    }
+
+    return res.status(200).json({
+      message: "You have left the team successfully",
+    });
+
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -280,4 +339,47 @@ router.post("/make-admin", authenticate, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+/* ---------------------------------------------------
+   DISMANTLE TEAM (Leader only)
+--------------------------------------------------- */
+router.post("/dismantle", authenticate, async (req, res) => {
+  try {
+    const leaderId = req.user.id;
+    const { teamid } = req.body;
+
+    const team = await Team.findById(teamid);
+    if (!team)
+      return res.status(404).json({ message: "Team not found" });
+
+    if (team.leader.toString() !== leaderId) {
+      return res
+        .status(403)
+        .json({ message: "Only team leader can dismantle team" });
+    }
+
+    const eventId = team.eventid;
+
+    // 1. Remove team from event
+    await Event.findByIdAndUpdate(eventId, {
+      $pull: { teams: team._id },
+    });
+
+    // 2. Remove event from all team members
+    await User.updateMany(
+      { _id: { $in: team.members } },
+      { $pull: { events: eventId } }
+    );
+
+    // 3. Delete team
+    await Team.findByIdAndDelete(teamid);
+
+    return res.status(200).json({
+      message: "Team dismantled successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 export default router;
