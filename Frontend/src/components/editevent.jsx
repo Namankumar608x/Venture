@@ -12,14 +12,49 @@ export default function EditEventPage() {
 
   const [form, setForm] = useState({
     name: "",
-    description: "",
     maxPlayer: 1,
     registrationOpen: true,
     status: "registration",
   });
+  const [rules,setRules]=useState([{
+    title:"",
+    points:[],
+  }]);
 
   /* ---------------- AUTH ---------------- */
+const addRule = () => {
+  setRules([...rules, { title: "", points: [] }]);
+};
 
+const removeRule = (ruleIndex) => {
+  setRules(rules.filter((_, i) => i !== ruleIndex));
+};
+
+const updateRuleTitle = (ruleIndex, value) => {
+  const updated = [...rules];
+  updated[ruleIndex].title = value;
+  setRules(updated);
+};
+
+const addPoint = (ruleIndex) => {
+  const updated = [...rules];
+  updated[ruleIndex].points.push("");
+  setRules(updated);
+};
+
+const updatePoint = (ruleIndex, pointIndex, value) => {
+  const updated = [...rules];
+  updated[ruleIndex].points[pointIndex] = value;
+  setRules(updated);
+};
+
+const removePoint = (ruleIndex, pointIndex) => {
+  const updated = [...rules];
+  updated[ruleIndex].points = updated[ruleIndex].points.filter(
+    (_, i) => i !== pointIndex
+  );
+  setRules(updated);
+};
   const getAuthConfig = () => {
     const token = localStorage.getItem("accessToken");
     if (!token) return null;
@@ -59,6 +94,11 @@ export default function EditEventPage() {
         registrationOpen: e.registrationOpen ?? true,
         status: e.status || "registration",
       });
+        setRules(
+      Array.isArray(e.rules) && e.rules.length > 0
+        ? e.rules
+        : []
+    );
     } catch {
       setMessage("Failed to load event details");
     } finally {
@@ -82,15 +122,18 @@ export default function EditEventPage() {
     try {
       const config = getAuthConfig();
       if (!config) return;
-
-      await axios.put(
-        `http://localhost:5005/events/${eventId}/edit`,
-        form,
+       console.log("edit event");
+      await axios.post(
+        `http://localhost:5005/extra/${eventId}/edit-event`,{
+             ...form, rules
+        },
+       
         config
       );
 
       navigate(`/events/${clubid}/${eventId}`);
     } catch (err) {
+      console.log(err.response?.data?.message);
       setMessage(err.response?.data?.message || "Update failed");
     }
   };
@@ -137,18 +180,105 @@ export default function EditEventPage() {
               required
             />
           </div>
-
-          {/* DESCRIPTION */}
-          <div>
-            <label className="text-sm text-slate-400">Description</label>
-            <textarea
-              className={`${input} min-h-[120px]`}
+           <div>
+            <label className="text-sm text-slate-400">Event description</label>
+            <input
+              className={input}
               value={form.description}
               onChange={(e) =>
                 setForm({ ...form, description: e.target.value })
               }
+              required
             />
           </div>
+
+       <div className="space-y-6">
+  <label className="text-sm text-slate-400">
+    Rules & Guidelines
+  </label>
+
+  {rules.map((rule, ruleIndex) => (
+    <div
+      key={ruleIndex}
+      className="border border-slate-700 rounded-lg p-4 space-y-3 bg-slate-800/40"
+    >
+      {/* RULE HEADER */}
+      <div className="flex justify-between items-center">
+        <h3 className="text-sm font-semibold text-slate-300">
+          Rule {ruleIndex + 1}
+        </h3>
+
+        {rules.length > 1 && (
+          <button
+            type="button"
+            onClick={() => removeRule(ruleIndex)}
+            className="text-red-400 text-sm"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+
+      {/* RULE TITLE */}
+      <input
+        className={input}
+        placeholder="Rule title (e.g. Team Composition)"
+        value={rule.title}
+        onChange={(e) =>
+          updateRuleTitle(ruleIndex, e.target.value)
+        }
+      />
+
+      {/* POINTS */}
+      <div className="space-y-2">
+        {rule.points.map((point, pointIndex) => (
+          <div key={pointIndex} className="flex gap-2">
+            <input
+              className={`${input} flex-1`}
+              placeholder={`Point ${pointIndex + 1}`}
+              value={point}
+              onChange={(e) =>
+                updatePoint(
+                  ruleIndex,
+                  pointIndex,
+                  e.target.value
+                )
+              }
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                removePoint(ruleIndex, pointIndex)
+              }
+              className="px-3 rounded bg-red-600 hover:bg-red-500"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* ADD POINT */}
+      <button
+        type="button"
+        onClick={() => addPoint(ruleIndex)}
+        className="text-sm text-emerald-400 hover:underline"
+      >
+        + Add Point
+      </button>
+    </div>
+  ))}
+
+  {/* ADD RULE */}
+  <button
+    type="button"
+    onClick={addRule}
+    className="text-sm text-blue-400 hover:underline"
+  >
+    + Add Another Rule
+  </button>
+</div>
 
           {/* TEAM SIZE */}
           <div>

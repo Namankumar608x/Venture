@@ -62,7 +62,5 @@ return res.status(200).json({
     console.error(error);
     res.status(500).json({ message: "Server error" });
     }
-
-
 });
 export default router;

@@ -14,6 +14,7 @@ import Signupclub from "./components/signupclub.jsx";
 import EventQueries from "./components/EventQueries";
 import AdminEventQueries from "./components/AdminEventQueries";
 import Edit from "./components/editevent.jsx";
+import Profile from "./components/profile";
 import EventBracket from "./components/EventBracket";
 import EventMatches from "./components/EventMatches";
 import MatchControl from "./components/MatchControl";
@@ -44,7 +45,7 @@ export default function App() {
   <Route path="/signup" element={<Signup />} />
   <Route path="/events/:clubid/login" element={<Loginclub />} />
   <Route path="/events/:clubid/signup" element={<Signupclub />} />
-
+ <Route path="/profile" element={<Profile />} />
   {/* PROTECTED */}
   <Route path="/home" element={
     <ProtectedRoute>

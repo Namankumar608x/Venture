@@ -1,14 +1,16 @@
-// EventsDashboard.jsx
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate,useParams } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import EventCard from "./EventCard";
 
 function EventsDashboard() {
+    const { clubid } = useParams();
   const [myAdminClubs, setMyAdminClubs] = useState([]);
   const [participantClubs, setParticipantClubs] = useState([]);
-  const [selectedClub, setSelectedClub] = useState("");
+  const [selectedClub, setSelectedClub] = useState(clubid);
+  const [status,setstatus]=useState("");
+    const [teamc,setteamc]=useState("");
   const [event, setEvent] = useState({
     name: "",
     description: "",
@@ -17,7 +19,9 @@ function EventsDashboard() {
   const [message, setMessage] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const navigate = useNavigate();
-
+  const [showShare, setShowShare] = useState(false);
+const FRONTEND_URL="localhost:5173";
+  const link=`${FRONTEND_URL}/events/${clubid}/login`;
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
     if (token)
@@ -71,7 +75,10 @@ function EventsDashboard() {
       setMessage(err.response?.data?.error || "Failed to load clubs");
     }
   };
-
+  
+const sharelink=()=>{
+setShowShare(true);
+};
   const handleCreateEvent = async (e) => {
     e.preventDefault();
     if (!selectedClub) {
@@ -89,7 +96,7 @@ function EventsDashboard() {
       if (!config) return;
       const res = await axios.post(
         "http://localhost:5005/events/new",
-        { clubid: selectedClub, ...event },
+        { clubid: selectedClub, ...event,status,teamc },
         config
       );
       setMessage(res.data?.message || "Event created");
@@ -135,17 +142,71 @@ setClubEvents(updatedEvents);
   }, [selectedClub]);
 
   return (
+   
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 flex items-start justify-center">
       <div className="w-full max-w-5xl relative z-10">
         <div className="flex items-center justify-between mb-6">
           <div>
+             {showShare && (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+
+    {/* BACKDROP */}
+    <div
+      className="absolute inset-0 bg-black/60"
+      onClick={() => setShowShare(false)}
+    />
+
+    {/* MODAL BOX */}
+    <div className="relative bg-slate-800 w-full max-w-md rounded-xl shadow-2xl p-6 z-[10000]">
+
+      <h2 className="text-lg font-semibold mb-3 text-white">
+        Share Link
+      </h2>
+
+      {/* LINK BOX */}
+      <div className="flex items-center gap-2 bg-slate-900 p-2 rounded">
+        <input
+          value={link}
+          readOnly
+          className="flex-1 bg-transparent text-sm text-slate-300 outline-none"
+        />
+
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(link);
+            alert("Link copied!");
+          }}
+          className="px-3 py-1 bg-blue-600 rounded text-xs"
+        >
+          Copy
+        </button>
+      </div>
+
+      {/* CLOSE */}
+      <div className="text-right mt-4">
+        <button
+          onClick={() => setShowShare(false)}
+          className="text-sm text-slate-400 hover:text-white"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
             <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
               Events <span className="text-blue-500">Manager</span>
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              Create events inside your clubs (tournament id = club id).
+              Create events inside your clubs.
             </p>
           </div>
+            <button
+            onClick={sharelink}
+            className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700"
+          >
+            Share direct link to join your club
+          </button>
         </div>
 
         <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 p-6 md:p-8">
@@ -197,6 +258,36 @@ setClubEvents(updatedEvents);
                   placeholder="Max players in a team"
                   className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
+                 <select
+                  value={status}
+                  onChange={(e) => setstatus(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                >
+                  <option value="">Select status</option>
+                  
+                    <option key="registration" value="registration">
+                     Registration Open
+                    </option>
+                     <option key="draft" value="draft">
+                     Draft
+                    </option>
+             
+                </select>
+                <select
+                  value={teamc}
+                  onChange={(e) => setteamc(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                >
+                  <option value="">Select team creation rights</option>
+                  
+                    <option key="admin" value="admin">
+                    Admin/Manager's only
+                    </option>
+                     <option key="users" value="users">
+                     All users
+                    </option>
+             
+                </select>
 
                 <button
                   type="submit"
