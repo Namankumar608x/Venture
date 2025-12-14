@@ -103,13 +103,6 @@ function Home() {
     }
   };
 
-  /* ---------------- LOGOUT ---------------- */
-
-  const handleLogout = () => {
-    localStorage.clear();
-    navigate("/");
-  };
-
   /* ============================ UI ============================ */
 
   return (
@@ -127,12 +120,7 @@ function Home() {
             </p>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700"
-          >
-            Logout
-          </button>
+        
         </div>
 
         {/* MAIN CARD */}

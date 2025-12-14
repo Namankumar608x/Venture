@@ -24,6 +24,10 @@ const [searchResults, setSearchResults] = useState([]);
     location: "",
     description: "",
   });
+  const [rules,setRules]=useState([{
+      title:"",
+      points:[],
+    }]);
   const navigate=useNavigate();
 
   const [teamForm, setTeamForm] = useState({ teamname: "" });
@@ -151,6 +155,8 @@ useEffect(() => {
 
       setEvent(res.data.event);
       setRole(res.data.role);
+      setRules(res.data.event.rules);
+      console.log(rules);
     } catch (err) {
       setMessage("Failed to load event");
     } finally {
@@ -193,7 +199,7 @@ useEffect(() => {
     );
   };
 
-  const handleTeamCreate = (e) => {
+  const handleTeamCreate = async(e) => {
     e.preventDefault();
     const res=postAction(
       "http://localhost:5005/teams/new-team",
@@ -201,6 +207,7 @@ useEffect(() => {
       "Team created"
     );    
   setTeamForm({ teamname: "" });
+    await fetchteams();
   };
 
   const sendJoinRequest = (teamId) => {
@@ -286,17 +293,16 @@ useEffect(() => {
         {/* HEADER */}
         <div>
           <h1 className="text-3xl font-bold">{event?.name}</h1>
+          <p className="text-slate-400 text-sm">Event description: {event?.description}</p>
           <p className="text-slate-400 text-sm">Event ID: {event?._id}</p>
           <p className="text-xs text-blue-400 mt-1">Role: {role}</p>
         </div>
         <div className={card}>
-  <h3 className="font-semibold mb-3">Event Roles</h3><div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-  <div>
-    <h1 className="text-3xl font-bold">{event?.name}</h1>
-    <p className="text-slate-400 text-sm">Event ID: {event?._id}</p>
-    <p className="text-xs text-blue-400 mt-1">Role: {role}</p>
-  </div>
-
+          
+ < div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+ 
+  
+ <h3 className="font-semibold mb-3">Event Roles</h3>
   {/* QUERY / MANAGE BUTTON */}
   <button
     onClick={handleQueryNavigation}
@@ -318,6 +324,7 @@ useEffect(() => {
       Edit Event Details
     </button>
   )}
+  
 </div>
 
 
@@ -333,7 +340,6 @@ useEffect(() => {
       ))
     )}
   </div>
-
   <div>
     <h4 className="text-sm text-emerald-400 mb-1">Managers</h4>
     {managers.length === 0 ? (
@@ -346,7 +352,46 @@ useEffect(() => {
       ))
     )}
   </div>
+  </div>
+  <div className={card}>
+  <h3 className="text-2xl font-semibold mb-4">
+    Rules & Guidelines
+  </h3>
+
+  {rules.length === 0 ? (
+    <p className="text-slate-400 text-sm">
+      No rules have been added for this event.
+    </p>
+  ) : (
+    <div className="space-y-4">
+
+      {rules.map((rule, ruleIndex) => (
+        <div
+          key={ruleIndex}
+          className="p-4 bg-slate-700/40 rounded-lg border border-slate-600"
+        >
+          {/* RULE TITLE */}
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center text-sm font-bold">
+              {ruleIndex + 1}
+            </div>
+            <h4 className="text-lg font-semibold">
+              {rule.title}
+            </h4>
+          </div>
+
+          {/* RULE POINTS */}
+          <ul className="list-disc list-inside space-y-1 text-slate-300 text-sm pl-10">
+            {rule.points.map((point, pointIndex) => (
+              <li key={pointIndex}>{point}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  )}
 </div>
+
 
 
         <div className="grid lg:grid-cols-3 gap-6">
@@ -462,20 +507,55 @@ useEffect(() => {
             You are not part of any team.
           </p>
 
-          {/* Create team form */}
-          <form onSubmit={handleTeamCreate} className="flex gap-2 mb-3">
-            <input
-              className={input}
-              placeholder="Team name"
-              value={teamForm.teamname}
-              onChange={(e) =>
-                setTeamForm({ teamname: e.target.value })
-              }
-            />
-            <button className="px-3 bg-blue-600 rounded-lg">
-              Create
-            </button>
-          </form>
+         {/* Create team form */}
+{event.teamsBy === "admin" ? (
+  role !== "participant" ? (
+    event.status === "registration" ? (
+      <form onSubmit={handleTeamCreate} className="flex gap-2 mb-3">
+        <input
+          className={input}
+          placeholder="Team name"
+          value={teamForm.teamname}
+          onChange={(e) =>
+            setTeamForm({ teamname: e.target.value })
+          }
+        />
+        <button className="px-3 bg-blue-600 rounded-lg">
+          Create
+        </button>
+      </form>
+    ) : (
+      <p className="text-slate-400">
+        Registration currently closed
+      </p>
+    )
+  ) : (
+    <p className="text-slate-400">
+      Registration can be done only by admin
+    </p>
+  )
+) : (
+  event.status === "registration" ? (
+    <form onSubmit={handleTeamCreate} className="flex gap-2 mb-3">
+      <input
+        className={input}
+        placeholder="Team name"
+        value={teamForm.teamname}
+        onChange={(e) =>
+          setTeamForm({ teamname: e.target.value })
+        }
+      />
+      <button className="px-3 bg-blue-600 rounded-lg">
+        Create
+      </button>
+    </form>
+  ) : (
+    <p className="text-slate-400">
+      Registration currently closed
+    </p>
+  )
+)}
+
 
          
         </div>
@@ -676,6 +756,7 @@ useEffect(() => {
                 </select>
 
                 <input
+                  type="time"
                   className={input}
                   placeholder="Match time"
                   value={matchForm.time}

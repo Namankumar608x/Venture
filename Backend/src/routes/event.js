@@ -16,14 +16,14 @@ const checkEvent = async (eventId) => {
 
 router.post("/new",authenticate,async(req,res)=>{
 const userid=req.user.id;
-const {clubid,name,description,maxPlayer}=req.body;
+const {clubid,name,description,maxPlayer,status,teamc}=req.body;
 try {
     const check=await Club.findById(clubid);//club exist karta hai ya nahi
 if(!check){
     return res.status(404).json({message:"No club found!"});
 }
 if (check.admin.toString()===userid || check.managers.map(id=>id.toString()).includes(userid)){
-    const event=new Event({name,admin:[userid],club:clubid,description,maxPlayer});
+    const event=new Event({name,admin:[userid],club:clubid,description,maxPlayer,status,teamsBy:teamc});
     const newevent=await event.save();
     check.events.push(newevent._id);
     const user=await User.findById(userid);
@@ -168,6 +168,7 @@ return res.status(200).json({
 
 
 });
+
 router.post("/join-event",authenticate,async(req,res)=>{
   try {
     const playerid=req.user.id;

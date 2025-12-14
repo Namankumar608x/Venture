@@ -12,6 +12,7 @@ import club from "./src/routes/clubs.js";
 import event from "./src/routes/event.js";
 import teams from "./src/routes/team.js";
 import schedule from "./src/routes/schedule.js";
+import extra from "./src/routes/extra.js";
 dotenv.config();
 
 const app = express();
@@ -41,7 +42,7 @@ app.use(
 
 mongo();
 
-app.use("/", home);
+app.use("/extra", extra);
 app.use("/auth", auth);
 app.use("/clubs", club);
 app.use("/events", event);

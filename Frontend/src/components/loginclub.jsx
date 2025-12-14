@@ -13,7 +13,15 @@ function Login() {
   });
   const [message, setMessage] = useState("");
   const navigate = useNavigate();
-
+const joinclub=async()=>{
+ try{
+           const res=await axios.post(`http://localhost:5005/clubs/join`, {
+        clubid
+      });
+        }catch(err){
+          console.log("error adding in club");
+        }
+};
   // If user already has a valid token, go to home
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
@@ -22,6 +30,7 @@ function Login() {
       const payload = jwtDecode(token);
       if (payload.exp && Date.now() / 1000 < payload.exp) {
         // token valid -> set default header and navigate
+       joinclub();
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
         navigate("/home", { replace: true });
       } else {

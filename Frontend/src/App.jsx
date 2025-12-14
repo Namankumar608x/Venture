@@ -14,6 +14,7 @@ import Signupclub from "./components/signupclub.jsx";
 import EventQueries from "./components/EventQueries";
 import AdminEventQueries from "./components/AdminEventQueries";
 import Edit from "./components/editevent.jsx";
+import Profile from "./components/profile";
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("accessToken");
   const refreshToken = localStorage.getItem("refreshToken");
@@ -39,7 +40,7 @@ export default function App() {
   <Route path="/signup" element={<Signup />} />
   <Route path="/events/:clubid/login" element={<Loginclub />} />
   <Route path="/events/:clubid/signup" element={<Signupclub />} />
-
+ <Route path="/profile" element={<Profile />} />
   {/* PROTECTED */}
   <Route path="/home" element={
     <ProtectedRoute>

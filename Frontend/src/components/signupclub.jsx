@@ -16,12 +16,22 @@ function Signup() {
   const navigate = useNavigate();
   const {clubid}=useParams();
   // If user already has a valid token, go to home
+  const joinclub=async()=>{
+   try{
+             const res=await axios.post(`http://localhost:5005/clubs/join`, {
+          clubid
+        });
+          }catch(err){
+            console.log("error adding in club");
+          }
+  };
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
     if (!token) return;
     try {
       const payload = jwtDecode(token);
       if (payload.exp && Date.now() / 1000 < payload.exp) {
+        joinclub();
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
         navigate("/home", { replace: true });
       } else {
