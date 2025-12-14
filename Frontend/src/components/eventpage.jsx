@@ -30,7 +30,7 @@ const [searchResults, setSearchResults] = useState([]);
       points:[],
     }]);
   const navigate=useNavigate();
-
+    const isAdmin = role === "admin" || role === "manager";
   const [teamForm, setTeamForm] = useState({ teamname: "" });
   const [promoteForm, setPromoteForm] = useState({
     userid: "",
@@ -809,33 +809,49 @@ useEffect(() => {
         )}
      
       </div>
-      <div className="flex gap-4 mt-4 mb-6">
+      <div className="flex flex-wrap gap-3 mb-6">
+
+  {/* Brackets – everyone */}
   <Link
     to={`/events/${clubid}/${eventId}/bracket`}
-    className="px-4 py-2 bg-slate-800 hover:bg-slate-700
-               border border-slate-700 rounded-lg text-sm"
+    className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
   >
-    Bracket
+    Brackets
   </Link>
 
+  {/* Matches – admin only */}
+  {isAdmin && (
+    <Link
+      to={`/events/${clubid}/${eventId}/matches`}
+      className="px-4 py-2 bg-purple-600 text-white rounded-lg"
+    >
+      Matches
+    </Link>
+  )}
+
+  {/* Queries – role based */}
   <Link
-    to={`/events/${clubid}/${eventId}/matches`}
-    className="px-4 py-2 bg-slate-800 hover:bg-slate-700
-               border border-slate-700 rounded-lg text-sm"
+    to={
+      role === "participant"
+        ? `/events/${clubid}/${eventId}/query`
+        : `/events/${clubid}/${eventId}/queries/admin`
+    }
+    className="px-4 py-2 bg-slate-700 text-white rounded-lg"
   >
-    Matches
+    Queries
   </Link>
 
-  
-
-  <Link
-    to={`/events/${clubid}/${eventId}/winner`}
-    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600
-               rounded-lg text-sm"
-  >
-    Winner
-  </Link>
+  {/* Admin panel */}
+  {isAdmin && (
+    <Link
+      to={`/events/${clubid}/${eventId}/edit`}
+      className="px-4 py-2 bg-emerald-600 text-white rounded-lg"
+    >
+      Admin Panel
+    </Link>
+  )}
 </div>
+
 
     </div>
    

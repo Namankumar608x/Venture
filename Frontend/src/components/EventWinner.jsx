@@ -16,6 +16,7 @@ export default function EventWinner(){
     auth()
   ).then(res=>{
     setWinner(res.data.winner);
+    
   });
 },[eventId]);
 

@@ -30,53 +30,57 @@ const nearestPowerOfTwo = (n) => {
 };
 
 async function progressKnockoutWinner(match) {
-  console.log("[PROGRESSION] Starting progression");
-
+  // 1️⃣ Fetch current stage
   const currentStage = await Stage.findById(match.stageid);
   if (!currentStage) return;
 
-  console.log("[PROGRESSION] Current Stage:", currentStage.name);
-
-  // Find next stage safely
+  // 2️⃣ Find next stage
   const nextStage = await Stage.findOne({
-    eventid: currentStage.eventid,
+    eventid: match.eventid,
     order: { $gt: currentStage.order }
   }).sort({ order: 1 });
 
-  if (!nextStage) {
-    console.log("[PROGRESSION] No next stage (tournament end)");
-    return;
-  }
+  // Final has no next stage
+  if (!nextStage) return;
 
-  console.log("[PROGRESSION] Next Stage:", nextStage.name);
-
-  // Find index of match in current stage
+  // 3️⃣ Find match index in current stage
   const matchIndex = currentStage.matches.findIndex(
     id => id.toString() === match._id.toString()
   );
 
   if (matchIndex === -1) {
-    console.log("[PROGRESSION][ERROR] Match not found in stage");
-    return;
+    throw new Error("Match not found in its stage");
   }
 
+  // 4️⃣ Determine next match + slot
   const nextMatchIndex = Math.floor(matchIndex / 2);
   const slot = matchIndex % 2 === 0 ? "teamA" : "teamB";
 
   const nextMatchId = nextStage.matches[nextMatchIndex];
-  const nextMatch = await Match.findById(nextMatchId);
+  if (!nextMatchId) return;
 
-  if (!nextMatch) return;
+  // 5️⃣ Atomic update (NO overwrite, NO duplicate)
+  const update = {};
+  update[`${slot}.teamId`] = match.winner;
 
-  console.log(
-    `[PROGRESSION] Placing winner in ${nextStage.name} → Match ${nextMatchIndex} → ${slot}`
+  const updated = await Match.findOneAndUpdate(
+    {
+      _id: nextMatchId,
+      [`${slot}.teamId`]: null,
+      $nor: [
+        { "teamA.teamId": match.winner },
+        { "teamB.teamId": match.winner }
+      ]
+    },
+    { $set: update },
+    { new: true }
   );
 
-  nextMatch[slot].teamId = match.winner;
-  await nextMatch.save();
-
-  console.log("[PROGRESSION] Winner progressed successfully");
+  if (!updated) {
+    console.warn("[PROGRESSION] Slot already filled or duplicate prevented");
+  }
 }
+
 
 const router=express.Router();
 const checkEvent = async (eventId) => {
@@ -1103,85 +1107,30 @@ router.put("/:matchId/status", authenticate, async (req, res) => {
 router.put("/:matchId/result", authenticate, async (req, res) => {
   const userId = req.user.id;
   const { matchId } = req.params;
-  const { winnerTeamId, isDraw, decidedBy } = req.body || {};
-
-  console.log("=====================================");
-  console.log("[MATCH RESULT] Declare result");
-  console.log("[MATCH RESULT] User:", userId);
-  console.log("[MATCH RESULT] Match:", matchId);
-  console.log("[MATCH RESULT] Body:", req.body);
-  console.log("=====================================");
+  const { winnerTeamId } = req.body;
 
   try {
-    // 1️⃣ Fetch match
+    if (!winnerTeamId) {
+      return res.status(400).json({ message: "Winner team is required" });
+    }
+
     const match = await Match.findById(matchId);
     if (!match) {
       return res.status(404).json({ message: "Match not found" });
     }
 
-    // 2️⃣ Match must be finished
     if (match.status !== "finished") {
       return res.status(400).json({
-        message: "Match must be finished before declaring result"
+        message: "Match must be finished before declaring winner"
       });
     }
 
-    // 3️⃣ Result already declared
-    if (match.winner || match.isDraw) {
+    if (match.winner) {
       return res.status(400).json({
-        message: "Match result already declared"
+        message: "Winner already declared"
       });
     }
 
-    // 4️⃣ Fetch event
-    const event = await Event.findById(match.eventid);
-    if (!event) {
-      return res.status(404).json({ message: "Event not found" });
-    }
-
-    // 5️⃣ Schedule lock check
-    if (!event.isScheduleLocked) {
-      return res.status(403).json({
-        message: "Schedule must be locked"
-      });
-    }
-
-    // 6️⃣ Permission check
-    const isAdmin = event.admin.map(id => id.toString()).includes(userId);
-    const isManager = event.managers.map(id => id.toString()).includes(userId);
-
-    if (!isAdmin && !isManager) {
-      return res.status(403).json({
-        message: "Not authorized to declare result"
-      });
-    }
-
-    // ==================================================
-    // 🟡 DRAW CASE
-    // ==================================================
-    if (isDraw === true) {
-      match.isDraw = true;
-      match.decidedBy = decidedBy || "DRAW";
-      await match.save();
-
-      console.log("[MATCH RESULT] Draw recorded");
-
-      return res.status(200).json({
-        message: "Match declared as draw",
-        matchId
-      });
-    }
-
-    // ==================================================
-    // 🟢 WINNER CASE
-    // ==================================================
-    if (!winnerTeamId) {
-      return res.status(400).json({
-        message: "winnerTeamId is required"
-      });
-    }
-
-    // Winner must be one of the teams
     const teamA = match.teamA.teamId?.toString();
     const teamB = match.teamB.teamId?.toString();
 
@@ -1191,29 +1140,33 @@ router.put("/:matchId/result", authenticate, async (req, res) => {
       });
     }
 
+    // 1️⃣ Save winner
     match.winner = winnerTeamId;
-    match.decidedBy = decidedBy || "NORMAL";
     await match.save();
-    // Auto progression (knockout only)
-if (match.matchType === "KNOCKOUT") {
-  await progressKnockoutWinner(match);
-}
 
-    console.log("[MATCH RESULT] Winner declared:", winnerTeamId);
+    // 2️⃣ Auto progression
+    await progressKnockoutWinner(match);
 
-    return res.status(200).json({
-      message: "Match result declared",
-      matchId,
-      winnerTeamId
+    // 3️⃣ Check if final
+    const stage = await Stage.findById(match.stageid);
+    if (stage?.name === "Final") {
+      return res.json({
+        message: "Tournament winner decided",
+        winnerTeamId
+      });
+    }
+
+    return res.json({
+      message: "Winner declared & progressed"
     });
 
-  } catch (error) {
-    console.error("[MATCH RESULT][ERROR]", error);
-    return res.status(500).json({
-      message: "Server error while declaring result"
-    });
+  } catch (err) {
+    console.error("[RESULT ERROR]", err);
+    return res.status(500).json({ message: "Server error" });
   }
 });
+
+
 
 
 /**
@@ -1261,29 +1214,27 @@ router.get("/:eventId", authenticate, async (req, res) => {
 router.get("/:eventId/stages", authenticate, async (req, res) => {
   const { eventId } = req.params;
 
-  console.log("=====================================");
-  console.log("[STAGES] Fetch stages for event");
-  console.log("[STAGES] Event:", eventId);
-  console.log("=====================================");
-
   try {
     const stages = await Stage.find({ eventid: eventId })
       .sort({ order: 1 })
       .populate({
         path: "matches",
+        strictPopulate: false,   // 🔥 KEY FIX
         populate: [
           {
             path: "teamA.teamId",
-            select: "teamname"
+            model: "Team",
+            select: "teamname",
+            strictPopulate: false
           },
           {
             path: "teamB.teamId",
-            select: "teamname"
+            model: "Team",
+            select: "teamname",
+            strictPopulate: false
           }
         ]
       });
-
-    console.log("[STAGES] Stages found:", stages.length);
 
     return res.status(200).json(stages);
   } catch (error) {
@@ -1293,6 +1244,7 @@ router.get("/:eventId/stages", authenticate, async (req, res) => {
     });
   }
 });
+
 // GET SINGLE MATCH
 router.get("/matches/:matchId", authenticate, async (req,res)=>{
   const { matchId } = req.params;
@@ -1339,5 +1291,246 @@ router.get("/:eventId/winner", authenticate, async (req,res)=>{
     winner: finalMatch.winner
   });
 });
+router.put(
+  "/matches/:matchId/round/score",
+  authenticate,
+  async (req, res) => {
+    const { matchId } = req.params;
+    const { team, points } = req.body;
+
+    if (!["A", "B"].includes(team)) {
+      return res.status(400).json({ message: "team must be A or B" });
+    }
+
+    try {
+      const match = await Match.findById(matchId);
+      if (!match) return res.status(404).json({ message: "Match not found" });
+
+      if (match.status !== "live") {
+        return res.status(400).json({ message: "Match is not live" });
+      }
+
+      // 🔐 ADMIN / MANAGER CHECK
+      const event = await Event.findById(match.eventid);
+      if (
+        !event.admin.map(id => id.toString()).includes(req.user.id) &&
+        !event.managers.map(id => id.toString()).includes(req.user.id)
+      ) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      // find or create current round
+      let round = match.rounds.find(
+        r => r.roundNo === match.currentRound
+      );
+
+      if (!round) {
+        round = {
+          roundNo: match.currentRound,
+          teamA_score: 0,
+          teamB_score: 0,
+          isCompleted: false
+        };
+        match.rounds.push(round);
+      }
+
+      if (round.isCompleted) {
+        return res.status(400).json({ message: "Round already completed" });
+      }
+
+      if (team === "A") round.teamA_score = points;
+      if (team === "B") round.teamB_score = points;
+
+      await match.save();
+
+      // 🔊 SOCKET EMIT (SAFE)
+      if (req.io) {
+        emitMatchEvent(req.io, match.eventid.toString(), "match:round:update", {
+          matchId,
+          roundNo: round.roundNo,
+          teamA_score: round.teamA_score,
+          teamB_score: round.teamB_score
+        });
+      }
+
+      res.json({ message: "Score updated" });
+
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+router.post(
+  "/matches/:matchId/round/end",
+  authenticate,
+  async (req, res) => {
+    const { matchId } = req.params;
+
+    try {
+      const match = await Match.findById(matchId);
+      if (!match) return res.status(404).json({ message: "Match not found" });
+
+      if (match.status !== "live") {
+        return res.status(400).json({ message: "Match is not live" });
+      }
+
+      // 🔐 ADMIN / MANAGER CHECK
+      const event = await Event.findById(match.eventid);
+      if (
+        !event.admin.map(id => id.toString()).includes(req.user.id) &&
+        !event.managers.map(id => id.toString()).includes(req.user.id)
+      ) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      const round = match.rounds.find(
+        r => r.roundNo === match.currentRound
+      );
+
+      if (!round || round.isCompleted) {
+        return res.status(400).json({ message: "Round not active" });
+      }
+
+      if (round.teamA_score === round.teamB_score) {
+        return res.status(400).json({
+          message: "Scores tied. Resolve before ending round."
+        });
+      }
+
+      // 🏆 AUTO ROUND WINNER
+      const winner =
+        round.teamA_score > round.teamB_score
+          ? match.teamA.teamId
+          : match.teamB.teamId;
+
+      round.winner = winner;
+      round.isCompleted = true;
+      match.currentRound += 1;
+
+      await match.save();
+
+      // 🔊 SOCKET EMIT
+      if (req.io) {
+        emitMatchEvent(req.io, match.eventid.toString(), "match:round:ended", {
+          matchId,
+          roundNo: round.roundNo,
+          winner,
+          teamA_score: round.teamA_score,
+          teamB_score: round.teamB_score
+        });
+      }
+
+      res.json({ message: "Round ended", winner });
+
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+router.post(
+  "/matches/:matchId/end",
+  authenticate,
+  async (req, res) => {
+    const { matchId } = req.params;
+
+    try {
+      const match = await Match.findById(matchId);
+      if (!match) return res.status(404).json({ message: "Match not found" });
+
+      if (match.status !== "live") {
+        return res.status(400).json({ message: "Match is not live" });
+      }
+
+      // 🔐 ADMIN / MANAGER CHECK
+      const event = await Event.findById(match.eventid);
+      if (
+        !event.admin.map(id => id.toString()).includes(req.user.id) &&
+        !event.managers.map(id => id.toString()).includes(req.user.id)
+      ) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      const wins = {};
+      for (const r of match.rounds) {
+        if (!r.isCompleted || !r.winner) continue;
+        wins[r.winner.toString()] =
+          (wins[r.winner.toString()] || 0) + 1;
+      }
+
+      const entries = Object.entries(wins);
+      if (entries.length === 0) {
+        return res.status(400).json({ message: "No completed rounds" });
+      }
+
+      const [winnerTeamId] = entries.sort((a, b) => b[1] - a[1])[0];
+
+      match.winner = winnerTeamId;
+      match.status = "finished";
+
+      await match.save();
+
+      // 🧠 KNOCKOUT AUTO PROGRESSION
+      await progressKnockoutWinner(match);
+
+      // 🔊 SOCKET EMIT
+      if (req.io) {
+        emitMatchEvent(req.io, match.eventid.toString(), "match:winner:declared", {
+          matchId,
+          winner: winnerTeamId
+        });
+      }
+
+      res.json({ message: "Match ended", winner: winnerTeamId });
+
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+router.put(
+  "/matches/:matchId/status",
+  authenticate,
+  async (req, res) => {
+    const { matchId } = req.params;
+    const { status } = req.body;
+
+    if (!["live"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const match = await Match.findById(matchId);
+    if (!match) return res.status(404).json({ message: "Match not found" });
+
+    if (match.status !== "upcoming") {
+      return res.status(400).json({
+        message: "Only upcoming matches can be started"
+      });
+    }
+
+    const event = await Event.findById(match.eventid);
+    if (
+      !event.admin.map(id => id.toString()).includes(req.user.id) &&
+      !event.managers.map(id => id.toString()).includes(req.user.id)
+    ) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    match.status = "live";
+    await match.save();
+
+    // socket broadcast
+    if (req.io) {
+      emitMatchEvent(req.io, match.eventid.toString(), "match:started", {
+        matchId
+      });
+    }
+
+    res.json({ message: "Match started" });
+  }
+);
+
 
 export default router;

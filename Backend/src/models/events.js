@@ -60,7 +60,7 @@ points:[{type:String}],
             ]
         }
     ],
-    isScheduleLocked:[ { type: Boolean, default: false }]
+    isScheduleLocked: { type: Boolean, default: false }
 
 },{timestamps:true});
 

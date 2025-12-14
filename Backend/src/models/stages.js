@@ -1,47 +1,52 @@
 import mongoose from "mongoose";
 
-const stageSchema = new mongoose.Schema({
+const stageSchema = new mongoose.Schema(
+  {
+    eventid: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Event",
+      required: true
+    },
 
-  eventid:{
-    type:mongoose.Schema.Types.ObjectId,
-    ref:"Event",
-    required:true
+    name: {
+      type: String,
+      required: true
+    },
+
+    type: {
+      type: String,
+      enum: ["KNOCKOUT", "LEAGUE"],
+      required: true
+    },
+
+    order: {
+      type: Number,
+      required: true
+    },
+
+    teams: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Team"
+      }
+    ],
+
+    // 🔥 FIX IS HERE
+    matches: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Match"
+      }
+    ],
+
+    status: {
+      type: String,
+      enum: ["pending", "ongoing", "completed"],
+      default: "pending"
+    }
   },
-
-  name:{
-    type:String,
-    required:true
-    // "Preliminary", "Quarter Final", "League Stage", "Final"
-  },
-
-  type:{
-    type:String,
-    enum:["KNOCKOUT","LEAGUE"],
-    required:true
-  },
-
-  order:{
-    type:Number,
-    required:true
-  },
-
-  teams:[{
-    type:mongoose.Schema.Types.ObjectId,
-    ref:"Team"
-  }],
-
-  matches:[{
-    type:mongoose.Schema.Types.ObjectId,
-    ref:"Matches"
-  }],
-
-  status:{
-    type:String,
-    enum:["pending","ongoing","completed"],
-    default:"pending"
-  }
-
-},{timestamps:true});
+  { timestamps: true }
+);
 
 const Stage = mongoose.model("Stage", stageSchema);
 export default Stage;
