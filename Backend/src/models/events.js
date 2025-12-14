@@ -59,7 +59,9 @@ points:[{type:String}],
                 }
             ]
         }
-    ]
+    ],
+    isScheduleLocked:[ { type: Boolean, default: false }]
+
 },{timestamps:true});
 
 const eventModel=mongoose.model("Event",eventSchema);
