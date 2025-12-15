@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { io } from "socket.io-client";
 
 export default function MatchControl() {
-  const { matchId, clubid } = useParams();
-  const navigate = useNavigate();
+  const { matchId } = useParams();
 
   const [match, setMatch] = useState(null);
   const [scoreA, setScoreA] = useState(0);
@@ -17,20 +16,26 @@ export default function MatchControl() {
     },
   });
 
+  /* ================= FETCH MATCH ================= */
   const fetchMatch = async () => {
     const res = await axios.get(
       `http://localhost:5005/events/matches/${matchId}`,
       auth()
     );
-    setMatch(res.data);
 
-    const currentRound = res.data.rounds?.find(
-      r => r.roundNo === res.data.currentRound
+    const data = res.data;
+    setMatch(data);
+
+    const activeRound = data.rounds.find(
+      r => r.roundNo === data.currentRound && !r.isCompleted
     );
 
-    if (currentRound && !currentRound.isCompleted) {
-      setScoreA(currentRound.teamA_score);
-      setScoreB(currentRound.teamB_score);
+    if (activeRound) {
+      setScoreA(activeRound.teamA_score);
+      setScoreB(activeRound.teamB_score);
+    } else {
+      setScoreA(0);
+      setScoreB(0);
     }
   };
 
@@ -38,197 +43,160 @@ export default function MatchControl() {
     fetchMatch();
   }, [matchId]);
 
-  // 🔌 SOCKET LISTENERS
-useEffect(() => {
-  if (!match?.eventid) return;
+  /* ================= SOCKET ================= */
+  useEffect(() => {
+    if (!match?.eventid) return;
 
-  const socket = io("http://localhost:5005", {
-    auth: {
-      token: localStorage.getItem("accessToken"),
-    },
-  });
+    const socket = io("http://localhost:5005", {
+      auth: { token: localStorage.getItem("accessToken") },
+    });
 
-  socket.emit("join:event", match.eventid.toString());
+    socket.emit("join:event", match.eventid.toString());
 
-  socket.on("match:round:update", (data) => {
-    if (data.matchId === matchId) {
-      setScoreA(data.teamA_score);
-      setScoreB(data.teamB_score);
-    }
-  });
+    socket.on("match:round:update", data => {
+      if (data.matchId === matchId) {
+        setScoreA(data.teamA_score);
+        setScoreB(data.teamB_score);
+      }
+    });
 
-  socket.on("match:round:ended", (data) => {
-    if (data.matchId === matchId) {
-      fetchMatch();
-    }
-  });
+    socket.on("match:round:ended", data => {
+      if (data.matchId === matchId) fetchMatch();
+    });
 
-  socket.on("match:winner:declared", (data) => {
-    if (data.matchId === matchId) {
-      navigate(`/events/${clubid}/${match.eventid}/winner`);
-    }
-  });
+    socket.on("match:ended", data => {
+      if (data.matchId === matchId) fetchMatch();
+    });
 
-  return () => {
-    socket.disconnect();
+    return () => socket.disconnect();
+  }, [match?.eventid, matchId]);
+
+  /* ================= DERIVED STATE ================= */
+  const currentRound = useMemo(() => {
+    if (!match) return null;
+    return match.rounds.find(r => r.roundNo === match.currentRound);
+  }, [match]);
+
+  const roundEnded = currentRound?.isCompleted === true;
+
+  /* ================= ACTIONS ================= */
+  const startMatch = async () => {
+    await axios.post(
+      `http://localhost:5005/events/matches/${matchId}/start`,
+      {},
+      auth()
+    );
+    fetchMatch();
   };
-}, [match, matchId, clubid, navigate]);
 
-
-  // 🔄 UPDATE SCORE (SAFE)
-  const updateScore = async (team, newScore) => {
-    if (newScore < 0) return;
+  const updateScore = async (team, val) => {
+    if (match.status !== "live" || roundEnded) return;
 
     await axios.put(
       `http://localhost:5005/events/matches/${matchId}/round/score`,
-      { team, points: newScore },
+      { team, points: val },
       auth()
     );
   };
 
   const incA = () => {
-    const val = scoreA + 1;
-    setScoreA(val);
-    updateScore("A", val);
+    const v = scoreA + 1;
+    setScoreA(v);
+    updateScore("A", v);
   };
 
   const decA = () => {
     if (scoreA === 0) return;
-    const val = scoreA - 1;
-    setScoreA(val);
-    updateScore("A", val);
+    const v = scoreA - 1;
+    setScoreA(v);
+    updateScore("A", v);
   };
 
   const incB = () => {
-    const val = scoreB + 1;
-    setScoreB(val);
-    updateScore("B", val);
+    const v = scoreB + 1;
+    setScoreB(v);
+    updateScore("B", v);
   };
 
   const decB = () => {
     if (scoreB === 0) return;
-    const val = scoreB - 1;
-    setScoreB(val);
-    updateScore("B", val);
+    const v = scoreB - 1;
+    setScoreB(v);
+    updateScore("B", v);
   };
 
-  // 🏁 END ROUND
   const endRound = async () => {
+    if (match.status !== "live" || roundEnded) return;
+
     await axios.post(
       `http://localhost:5005/events/matches/${matchId}/round/end`,
       {},
       auth()
     );
+
+    await fetchMatch();
   };
 
-  // 🏆 END MATCH
   const endMatch = async () => {
+    if (match.status !== "live") return;
+
     await axios.post(
       `http://localhost:5005/events/matches/${matchId}/end`,
       {},
       auth()
     );
+
+    await fetchMatch();
   };
-   const startMatch = async () => {
-  await axios.put(
-    `http://localhost:5005/events/matches/${matchId}/status`,
-    { status: "live" },
-    auth()
-  );
-  fetchMatch();
-};
 
   if (!match) return null;
 
-  const card =
-    "bg-slate-800 border border-slate-700 rounded-xl p-5 max-w-xl";
-
+  /* ================= UI ================= */
   return (
     <div className="min-h-screen bg-slate-900 p-6 text-white">
-      <div className={card}>
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 max-w-xl">
         <h2 className="text-xl font-bold mb-4">Match Control</h2>
 
         <p className="mb-2">
-          {match.teamA?.teamId?.teamname || "TBD"} vs{" "}
-          {match.teamB?.teamId?.teamname || "TBD"}
+          {match.teamA.teamId.teamname} vs {match.teamB.teamId.teamname}
         </p>
 
         <p className="text-sm text-slate-400 mb-4">
           Status: {match.status} | Round {match.currentRound}
         </p>
-         {/* START MATCH */}
-{match.status === "upcoming" && (
-  <button
-    onClick={startMatch}
-    className="mb-4 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700"
-  >
-    Start Match
-  </button>
-)}
 
-        {/* LIVE SCORE */}
-        <div className="flex items-center justify-between mb-6">
-          {/* TEAM A */}
-          <div className="text-center">
-            <p className="text-sm mb-2">
-              {match.teamA?.teamId?.teamname}
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={decA}
-                disabled={match.status !== "live"}
-                className="px-3 py-1 bg-slate-700 rounded disabled:opacity-50"
-              >
-                −
-              </button>
-              <span className="text-2xl font-bold w-8 text-center">
-                {scoreA}
-              </span>
-              <button
-                onClick={incA}
-                disabled={match.status !== "live"}
-                className="px-3 py-1 bg-slate-700 rounded disabled:opacity-50"
-              >
-                +
-              </button>
+        {match.status === "upcoming" && (
+          <button
+            onClick={startMatch}
+            className="mb-4 px-4 py-2 bg-green-600 rounded"
+          >
+            Start Match
+          </button>
+        )}
+
+        {/* SCORE */}
+        <div className="flex justify-between mb-6">
+          {[
+            { key: "A", name: match.teamA.teamId.teamname, score: scoreA },
+            { key: "B", name: match.teamB.teamId.teamname, score: scoreB },
+          ].map(t => (
+            <div key={t.key} className="text-center">
+              <p className="mb-2">{t.name}</p>
+              <div className="flex items-center gap-3">
+                <button onClick={t.key === "A" ? decA : decB}>−</button>
+                <span className="text-2xl">{t.score}</span>
+                <button onClick={t.key === "A" ? incA : incB}>+</button>
+              </div>
             </div>
-          </div>
-
-          <span className="text-2xl font-bold">:</span>
-
-          {/* TEAM B */}
-          <div className="text-center">
-            <p className="text-sm mb-2">
-              {match.teamB?.teamId?.teamname}
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={decB}
-                disabled={match.status !== "live"}
-                className="px-3 py-1 bg-slate-700 rounded disabled:opacity-50"
-              >
-                −
-              </button>
-              <span className="text-2xl font-bold w-8 text-center">
-                {scoreB}
-              </span>
-              <button
-                onClick={incB}
-                disabled={match.status !== "live"}
-                className="px-3 py-1 bg-slate-700 rounded disabled:opacity-50"
-              >
-                +
-              </button>
-            </div>
-          </div>
+          ))}
         </div>
 
-        {/* ACTION BUTTONS */}
+        {/* ACTIONS */}
         <div className="flex gap-3 mb-6">
           <button
             onClick={endRound}
-            disabled={match.status !== "live"}
-            className="px-4 py-2 bg-indigo-600 rounded-lg disabled:opacity-50"
+            disabled={match.status !== "live" || roundEnded}
+            className="px-4 py-2 bg-indigo-600 rounded disabled:opacity-50"
           >
             End Round
           </button>
@@ -236,38 +204,30 @@ useEffect(() => {
           <button
             onClick={endMatch}
             disabled={match.status !== "live"}
-            className="px-4 py-2 bg-emerald-600 rounded-lg disabled:opacity-50"
+            className="px-4 py-2 bg-emerald-600 rounded disabled:opacity-50"
           >
             End Match
           </button>
         </div>
 
-        {/* ROUND HISTORY */}
+        {/* HISTORY */}
         <div>
-          <h3 className="text-sm font-semibold mb-2 text-slate-300">
-            Rounds
-          </h3>
-
-          {match.rounds?.map(r => (
-            <div
-              key={r.roundNo}
-              className="flex justify-between text-sm text-slate-300 mb-1"
-            >
-              <span>Round {r.roundNo}</span>
-              <span>
-                {r.teamA_score} : {r.teamB_score}
-              </span>
-              <span className="text-green-400">
-                {r.winner
-                  ? r.winner.toString() ===
-                    match.teamA.teamId._id
-                    ? match.teamA.teamId.teamname
-                    : match.teamB.teamId.teamname
-                  : "-"}
-              </span>
+          <h3 className="mb-2">Rounds</h3>
+          {match.rounds.map(r => (
+            <div key={r.roundNo}>
+              Round {r.roundNo}: {r.teamA_score} : {r.teamB_score}
             </div>
           ))}
         </div>
+
+        {match.winner && (
+          <div className="mt-4 p-3 bg-green-700 rounded text-center">
+            🏆 Winner:{" "}
+            {match.winner.toString() === match.teamA.teamId._id
+              ? match.teamA.teamId.teamname
+              : match.teamB.teamId.teamname}
+          </div>
+        )}
       </div>
     </div>
   );

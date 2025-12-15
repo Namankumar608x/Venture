@@ -1363,131 +1363,87 @@ router.post(
   "/matches/:matchId/round/end",
   authenticate,
   async (req, res) => {
-    const { matchId } = req.params;
-
     try {
+      const { matchId } = req.params;
+
       const match = await Match.findById(matchId);
-      if (!match) return res.status(404).json({ message: "Match not found" });
+      if (!match) {
+        return res.status(404).json({ message: "Match not found" });
+      }
 
       if (match.status !== "live") {
         return res.status(400).json({ message: "Match is not live" });
       }
 
-      // 🔐 ADMIN / MANAGER CHECK
-      const event = await Event.findById(match.eventid);
-      if (
-        !event.admin.map(id => id.toString()).includes(req.user.id) &&
-        !event.managers.map(id => id.toString()).includes(req.user.id)
-      ) {
-        return res.status(403).json({ message: "Not authorized" });
-      }
-
+      // 🔎 FIND CURRENT ROUND
       const round = match.rounds.find(
         r => r.roundNo === match.currentRound
       );
 
-      if (!round || round.isCompleted) {
-        return res.status(400).json({ message: "Round not active" });
+      if (!round) {
+        return res.status(400).json({ message: "Current round not found" });
       }
 
-      if (round.teamA_score === round.teamB_score) {
-        return res.status(400).json({
-          message: "Scores tied. Resolve before ending round."
-        });
+      // 🛑 CRITICAL FIX: STOP DUPLICATE END
+      if (round.isCompleted) {
+        return res
+          .status(400)
+          .json({ message: "Round already ended" });
       }
 
-      // 🏆 AUTO ROUND WINNER
-      const winner =
-        round.teamA_score > round.teamB_score
-          ? match.teamA.teamId
-          : match.teamB.teamId;
+      // 🏆 DECIDE ROUND WINNER
+      if (round.teamA_score > round.teamB_score) {
+        round.winner = match.teamA.teamId;
+      } else if (round.teamB_score > round.teamA_score) {
+        round.winner = match.teamB.teamId;
+      } else {
+        round.winner = null; // draw (optional handling)
+      }
 
-      round.winner = winner;
       round.isCompleted = true;
-      match.currentRound += 1;
+
+      // 👉 CREATE NEXT ROUND ONLY ONCE
+      const nextRoundNo = match.currentRound + 1;
+
+      const exists = match.rounds.some(
+        r => r.roundNo === nextRoundNo
+      );
+
+      if (!exists) {
+        match.rounds.push({
+          roundNo: nextRoundNo,
+          teamA_score: 0,
+          teamB_score: 0,
+          isCompleted: false
+        });
+        match.currentRound = nextRoundNo;
+      }
 
       await match.save();
 
-      // 🔊 SOCKET EMIT
+      // 🔊 SOCKET
       if (req.io) {
-        emitMatchEvent(req.io, match.eventid.toString(), "match:round:ended", {
-          matchId,
-          roundNo: round.roundNo,
-          winner,
-          teamA_score: round.teamA_score,
-          teamB_score: round.teamB_score
-        });
+        emitMatchEvent(
+          req.io,
+          match.eventid.toString(),
+          "match:round:ended",
+          { matchId }
+        );
       }
 
-      res.json({ message: "Round ended", winner });
+      return res.json({
+        message: "Round ended successfully",
+        currentRound: match.currentRound
+      });
 
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Server error" });
+      console.error("[ROUND END ERROR]", err);
+      return res.status(500).json({ message: "Server error" });
     }
   }
 );
-router.post(
-  "/matches/:matchId/end",
-  authenticate,
-  async (req, res) => {
-    const { matchId } = req.params;
 
-    try {
-      const match = await Match.findById(matchId);
-      if (!match) return res.status(404).json({ message: "Match not found" });
 
-      if (match.status !== "live") {
-        return res.status(400).json({ message: "Match is not live" });
-      }
-
-      // 🔐 ADMIN / MANAGER CHECK
-      const event = await Event.findById(match.eventid);
-      if (
-        !event.admin.map(id => id.toString()).includes(req.user.id) &&
-        !event.managers.map(id => id.toString()).includes(req.user.id)
-      ) {
-        return res.status(403).json({ message: "Not authorized" });
-      }
-
-      const wins = {};
-      for (const r of match.rounds) {
-        if (!r.isCompleted || !r.winner) continue;
-        wins[r.winner.toString()] =
-          (wins[r.winner.toString()] || 0) + 1;
-      }
-
-      const entries = Object.entries(wins);
-      if (entries.length === 0) {
-        return res.status(400).json({ message: "No completed rounds" });
-      }
-
-      const [winnerTeamId] = entries.sort((a, b) => b[1] - a[1])[0];
-
-      match.winner = winnerTeamId;
-      match.status = "finished";
-
-      await match.save();
-
-      // 🧠 KNOCKOUT AUTO PROGRESSION
-      await progressKnockoutWinner(match);
-
-      // 🔊 SOCKET EMIT
-      if (req.io) {
-        emitMatchEvent(req.io, match.eventid.toString(), "match:winner:declared", {
-          matchId,
-          winner: winnerTeamId
-        });
-      }
-
-      res.json({ message: "Match ended", winner: winnerTeamId });
-
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Server error" });
-    }
-  }
-);
 router.put(
   "/matches/:matchId/status",
   authenticate,
@@ -1530,5 +1486,37 @@ router.put(
   }
 );
 
+router.post(
+  "/matches/:matchId/start",
+  authenticate,
+  async (req, res) => {
+    const { matchId } = req.params;
+
+    const match = await Match.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+
+    if (match.status !== "upcoming") {
+      return res.status(400).json({ message: "Match already started" });
+    }
+
+    match.status = "live";
+
+    // 🔥 CREATE FIRST ROUND
+    match.rounds.push({
+      roundNo: 1,
+      teamA_score: 0,
+      teamB_score: 0,
+      isCompleted: false
+    });
+
+    match.currentRound = 1;
+
+    await match.save();
+
+    res.json({ message: "Match started" });
+  }
+);
 
 export default router;
