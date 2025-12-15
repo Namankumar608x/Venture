@@ -15,6 +15,8 @@ export default function EditEventPage() {
     maxPlayer: 1,
     registrationOpen: true,
     status: "registration",
+    imgURL:"",
+    Sport:"",
   });
   const [rules,setRules]=useState([{
     title:"",
@@ -93,6 +95,8 @@ const removePoint = (ruleIndex, pointIndex) => {
         maxPlayer: e.maxPlayer || 1,
         registrationOpen: e.registrationOpen ?? true,
         status: e.status || "registration",
+        imgURL:e.imgURL || "",
+        Sport:e.Sport || ""
       });
         setRules(
       Array.isArray(e.rules) && e.rules.length > 0
@@ -190,6 +194,35 @@ const removePoint = (ruleIndex, pointIndex) => {
               }
               required
             />
+          </div>
+            <div>
+            <label className="text-sm text-slate-400">Event Banner link</label>
+            <input
+              className={input}
+              value={form.imgURL}
+              onChange={(e) =>
+                setForm({ ...form, imgURL: e.target.value })
+              }
+             
+            />
+          </div>
+           <div>
+            <label className="text-sm text-slate-400">Event Type</label>
+            <select
+              className={input}
+              value={form.Sport}
+              onChange={(e) =>
+                setForm({ ...form, Sport: e.target.value })
+              }
+            >
+              <option value="">Select type of Sport</option>
+              <option value="Cricket">Cricket</option>
+              <option value="Football">Football</option>
+              <option value="Chess">Chess</option>
+              <option value="Badminton">Badminton</option>
+              <option value="Volleyball">Volleyball</option>
+              <option value="Other">other</option>
+            </select>
           </div>
 
        <div className="space-y-6">

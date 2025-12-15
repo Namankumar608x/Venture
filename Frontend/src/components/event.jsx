@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { useNavigate,useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import EventCard from "./EventCard";
 
 function EventsDashboard() {
-    const { clubid } = useParams();
+  const { clubid } = useParams();
   const [myAdminClubs, setMyAdminClubs] = useState([]);
   const [participantClubs, setParticipantClubs] = useState([]);
   const [selectedClub, setSelectedClub] = useState(clubid);
-  const [status,setstatus]=useState("");
-    const [teamc,setteamc]=useState("");
+  const [status, setstatus] = useState("");
+  const [teamc, setteamc] = useState("");
   const [event, setEvent] = useState({
     name: "",
     description: "",
@@ -20,8 +20,8 @@ function EventsDashboard() {
   const [isCreating, setIsCreating] = useState(false);
   const navigate = useNavigate();
   const [showShare, setShowShare] = useState(false);
-const FRONTEND_URL="localhost:5173";
-  const link=`${FRONTEND_URL}/events/${clubid}/login`;
+  const FRONTEND_URL = "localhost:5173";
+  const link = `${FRONTEND_URL}/events/${clubid}/login`;
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
     if (token)
@@ -29,41 +29,46 @@ const FRONTEND_URL="localhost:5173";
     fetchClubs();
   }, []);
   const leaveClub = async (clubId) => {
-  if (!window.confirm("Are you sure you want to leave this club?")) return;
+    if (!window.confirm("Are you sure you want to leave this club?")) return;
 
-  try {
-    const config = getAuthConfig();
-    if (!config) return;
+    try {
+      const config = getAuthConfig();
+      if (!config) return;
 
-    await axios.post(
-      "http://localhost:5005/clubs/leave",
-      { clubid: clubId },
-      config
-    );
+      await axios.post(
+        "http://localhost:5005/clubs/leave",
+        { clubid: clubId },
+        config
+      );
 
-    fetchClubs(); // refresh lists
-  } catch (err) {
-    alert(err.response?.data?.message || "Failed to leave club");
-  }
-};
- const deleteClub = async (clubId) => {
-  if (!window.confirm("Are you sure you want to delete this club? This action cannot be reversed!!")) return;
-   
-  try {
-    const config = getAuthConfig();
-    if (!config) return;
+      fetchClubs(); // refresh lists
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to leave club");
+    }
+  };
+  const deleteClub = async (clubId) => {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this club? This action cannot be reversed!!"
+      )
+    )
+      return;
 
-    await axios.post(
-      "http://localhost:5005/clubs/delete",
-      { clubid: clubId },
-      config
-    );
+    try {
+      const config = getAuthConfig();
+      if (!config) return;
 
-    fetchClubs();
-  } catch (err) {
-    alert(err.response?.data?.message || "Failed to delete club");
-  }
-};
+      await axios.delete(
+        "http://localhost:5005/clubs/delete",
+        { clubid: clubId },
+        config
+      );
+
+      fetchClubs();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to delete club");
+    }
+  };
 
   const getAuthConfig = () => {
     const token = localStorage.getItem("accessToken");
@@ -105,16 +110,16 @@ const FRONTEND_URL="localhost:5173";
       setParticipantClubs(partRes.data.tournaments || partRes.data.clubs || []);
       // pick the first admin club as default selection
       const first = (adminRes.data.tournaments || adminRes.data.clubs || [])[0];
-      if (first) setSelectedClub(first._id || first.id);
+      
     } catch (err) {
       console.error(err);
       setMessage(err.response?.data?.error || "Failed to load clubs");
     }
   };
-  
-const sharelink=()=>{
-setShowShare(true);
-};
+
+  const sharelink = () => {
+    setShowShare(true);
+  };
   const handleCreateEvent = async (e) => {
     e.preventDefault();
     if (!selectedClub) {
@@ -132,13 +137,13 @@ setShowShare(true);
       if (!config) return;
       const res = await axios.post(
         "http://localhost:5005/events/new",
-        { clubid: selectedClub, ...event,status,teamc },
+        { clubid: selectedClub, ...event, status, teamc },
         config
       );
       setMessage(res.data?.message || "Event created");
       setEvent({ name: "", description: "", maxPlayer: "" });
-     const updatedEvents = await fetchEventsForClub(selectedClub);
-setClubEvents(updatedEvents);
+      const updatedEvents = await fetchEventsForClub(selectedClub);
+      setClubEvents(updatedEvents);
       if (res.data?.eventId) navigate(`/events/${res.data.eventId}`);
     } catch (err) {
       console.error(err);
@@ -154,7 +159,7 @@ setClubEvents(updatedEvents);
       if (!config) return [];
 
       const res = await axios.get(
-        `http://localhost:5005/events/club/${clubId}`,
+        `http://localhost:5005/events/club/${selectedClub}`,
         config
       );
 
@@ -178,58 +183,55 @@ setClubEvents(updatedEvents);
   }, [selectedClub]);
 
   return (
-   
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 flex items-start justify-center">
       <div className="w-full max-w-5xl relative z-10">
         <div className="flex items-center justify-between mb-6">
           <div>
-             {showShare && (
-  <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            {showShare && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+                {/* BACKDROP */}
+                <div
+                  className="absolute inset-0 bg-black/60"
+                  onClick={() => setShowShare(false)}
+                />
 
-    {/* BACKDROP */}
-    <div
-      className="absolute inset-0 bg-black/60"
-      onClick={() => setShowShare(false)}
-    />
+                {/* MODAL BOX */}
+                <div className="relative bg-slate-800 w-full max-w-md rounded-xl shadow-2xl p-6 z-[10000]">
+                  <h2 className="text-lg font-semibold mb-3 text-white">
+                    Share Link
+                  </h2>
 
-    {/* MODAL BOX */}
-    <div className="relative bg-slate-800 w-full max-w-md rounded-xl shadow-2xl p-6 z-[10000]">
+                  {/* LINK BOX */}
+                  <div className="flex items-center gap-2 bg-slate-900 p-2 rounded">
+                    <input
+                      value={link}
+                      readOnly
+                      className="flex-1 bg-transparent text-sm text-slate-300 outline-none"
+                    />
 
-      <h2 className="text-lg font-semibold mb-3 text-white">
-        Share Link
-      </h2>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(link);
+                        alert("Link copied!");
+                      }}
+                      className="px-3 py-1 bg-blue-600 rounded text-xs"
+                    >
+                      Copy
+                    </button>
+                  </div>
 
-      {/* LINK BOX */}
-      <div className="flex items-center gap-2 bg-slate-900 p-2 rounded">
-        <input
-          value={link}
-          readOnly
-          className="flex-1 bg-transparent text-sm text-slate-300 outline-none"
-        />
-
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(link);
-            alert("Link copied!");
-          }}
-          className="px-3 py-1 bg-blue-600 rounded text-xs"
-        >
-          Copy
-        </button>
-      </div>
-
-      {/* CLOSE */}
-      <div className="text-right mt-4">
-        <button
-          onClick={() => setShowShare(false)}
-          className="text-sm text-slate-400 hover:text-white"
-        >
-          Close
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+                  {/* CLOSE */}
+                  <div className="text-right mt-4">
+                    <button
+                      onClick={() => setShowShare(false)}
+                      className="text-sm text-slate-400 hover:text-white"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
               Events <span className="text-blue-500">Manager</span>
             </h1>
@@ -237,7 +239,7 @@ setClubEvents(updatedEvents);
               Create events inside your clubs.
             </p>
           </div>
-            <button
+          <button
             onClick={sharelink}
             className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700"
           >
@@ -294,20 +296,19 @@ setClubEvents(updatedEvents);
                   placeholder="Max players in a team"
                   className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
-                 <select
+                <select
                   value={status}
                   onChange={(e) => setstatus(e.target.value)}
                   className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
                   <option value="">Select status</option>
-                  
-                    <option key="registration" value="registration">
-                     Registration Open
-                    </option>
-                     <option key="draft" value="draft">
-                     Draft
-                    </option>
-             
+
+                  <option key="registration" value="registration">
+                    Registration Open
+                  </option>
+                  <option key="draft" value="draft">
+                    Draft
+                  </option>
                 </select>
                 <select
                   value={teamc}
@@ -315,14 +316,13 @@ setClubEvents(updatedEvents);
                   className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
                   <option value="">Select team creation rights</option>
-                  
-                    <option key="admin" value="admin">
+
+                  <option key="admin" value="admin">
                     Admin/Manager's only
-                    </option>
-                     <option key="users" value="users">
-                     All users
-                    </option>
-             
+                  </option>
+                  <option key="users" value="users">
+                    All users
+                  </option>
                 </select>
 
                 <button
@@ -352,7 +352,7 @@ setClubEvents(updatedEvents);
                     className="flex-1 px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                     id="openEventId"
                   />
-                 
+
                   <button
                     onClick={() => {
                       const val = document
@@ -425,9 +425,15 @@ setClubEvents(updatedEvents);
                         <div className="text-xs text-slate-400">
                           ID: {c._id || c.id}
                         </div>
-                      </div> <button onClick={()=>{deleteClub}} className="text-xs px-3 py-1 rounded-md bg-red-600 hover:bg-blue-500 text-white">
-          Delete
-        </button> 
+                      </div>{" "}
+                      <button
+                        onClick={() => {
+                          deleteClub(c._id || c.id);
+                        }}
+                        className="text-xs px-3 py-1 rounded-md bg-red-600 hover:bg-blue-500 text-white"
+                      >
+                        Delete
+                      </button>
                       <button
                         onClick={() => setSelectedClub(c._id || c.id)}
                         className="text-xs px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white"
@@ -463,9 +469,18 @@ setClubEvents(updatedEvents);
                           ID: {c._id || c.id}
                         </div>
                       </div>
-                      <button onClick={()=>{leaveClub}} className="text-xs px-3 py-1 rounded-md bg-red-700 hover:bg-slate-600 text-slate-10">
-         Leave
-        </button> 
+                      {!myAdminClubs.some(
+                        (adminClub) =>
+                          String(adminClub._id || adminClub.id) ===
+                          String(c._id || c.id)
+                      ) && (
+                        <button
+                          onClick={() => leaveClub(c._id || c.id)}
+                          className="text-xs px-3 py-1 rounded-md bg-red-700 hover:bg-slate-600 text-white"
+                        >
+                          Leave
+                        </button>
+                      )}
                       <button
                         onClick={() => setSelectedClub(c._id || c.id)}
                         className="text-xs px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100"

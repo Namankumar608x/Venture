@@ -8,10 +8,13 @@ const eventSchema=new mongoose.Schema({
 users:[{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true}],
   club:{type:mongoose.Schema.Types.ObjectId,ref:"Club",required:true},
 teamsBy:{type:String},
+imgURL:{type:String},
+Sport:{type:String},
   rules:[{
 title:{type:String},
 points:[{type:String}],
   }],
+
   status:{type:String},
     updates: [
         {

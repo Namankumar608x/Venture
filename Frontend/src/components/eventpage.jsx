@@ -43,6 +43,7 @@ const [searchResults, setSearchResults] = useState([]);
     teamB: "",
     time: "",
   });
+  
 useEffect(() => {
   const delay = setTimeout(() => {
     if (searchQuery.trim() === "") {
@@ -284,7 +285,6 @@ useEffect(() => {
   }
 };
 
-
   // -----------------------------------------------------
   // MAIN UI
   // -----------------------------------------------------
@@ -293,12 +293,38 @@ useEffect(() => {
       <div className="max-w-6xl mx-auto space-y-6">
 
         {/* HEADER */}
-        <div>
-          <h1 className="text-3xl font-bold">{event?.name}</h1>
-          <p className="text-slate-400 text-sm">Event description: {event?.description}</p>
-          <p className="text-slate-400 text-sm">Event ID: {event?._id}</p>
-          <p className="text-xs text-blue-400 mt-1">Role: {role}</p>
-        </div>
+        {/* HEADER */}
+<div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+
+  {/* LEFT: EVENT INFO */}
+  <div className="space-y-1">
+    <h1 className="text-3xl font-bold">{event?.name}</h1>
+
+    <p className="text-slate-400 text-sm">
+      Event description: {event?.description}
+    </p>
+
+    <p className="text-slate-400 text-sm">
+      Event ID: {event?._id}
+    </p>
+
+    <p className="text-xs text-blue-400 mt-1">
+      Role: {role}
+    </p>
+  </div>
+
+  {/* RIGHT: EVENT BANNER */}
+  {event?.imgURL && (
+    <img
+      src={event.imgURL}
+      alt="Event banner"
+      className="w-full md:w-64 h-60 object-cover rounded-xl border border-white/20"
+    />
+  )}
+
+</div>
+
+    
         <div className={card}>
           
  < div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -613,8 +639,69 @@ useEffect(() => {
       </div>
     );
   })()}
+  {/* ---------------- ADMIN: REGISTERED TEAMS DETAILS ---------------- */}
+{isAdmin ? (
+  <div className={card}>
+    <h2 className="text-2xl font-semibold mb-4 text-emerald-400">
+      Registered Teams – Admin View
+    </h2>
 
-  {/* ---------------- REGISTERED TEAMS ---------------- */}
+    {teams.filter(t => t.isRegistered).length === 0 ? (
+      <p className="text-slate-400 text-sm">
+        No teams have registered yet.
+      </p>
+    ) : (
+      <div className="space-y-4">
+        {teams
+          .filter(t => t.isRegistered)
+          .map((team) => (
+            <div
+              key={team._id}
+              className="p-4 bg-slate-700/40 rounded-lg border border-slate-600"
+            >
+              {/* TEAM HEADER */}
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-lg font-semibold">
+                  {team.teamname}
+                </h3>
+
+                <button
+                  onClick={() =>
+                    navigate(
+                      `/events/${clubid}/${eventId}/team/${team._id}`
+                    )
+                  }
+                  className="px-3 py-1 text-xs bg-indigo-600 rounded"
+                >
+                  View Team
+                </button>
+              </div>
+
+              {/* LEADER */}
+              <p className="text-sm text-slate-300">
+                <span className="text-slate-400">Leader:</span>{" "}
+                {team.leader?.username} — {team.leader?.email}
+              </p>
+
+              {/* MEMBERS */}
+              <p className="text-sm text-slate-400 mt-2 mb-1">
+                Members ({team.members.length}/{event?.maxPlayer})
+              </p>
+
+              <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
+                {team.members.map((m) => (
+                  <li key={m._id}>
+                    {m.username} — {m.email}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+      </div>
+    )}
+  </div>
+):(
+  <>
   <h3 className="text-lg font-semibold text-emerald-400 mt-4 mb-2">
     Registered Teams
   </h3>
@@ -643,6 +730,12 @@ useEffect(() => {
         </div>
       ))
   )}
+  </>
+)}
+
+
+  {/* ---------------- REGISTERED TEAMS ---------------- */}
+  
 </div>
         
 </div>
