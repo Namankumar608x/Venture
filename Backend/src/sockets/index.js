@@ -435,7 +435,7 @@ export default function setupSocket(io) {
         if (ack) ack({ success: false, error: "Server error" });
       }
     });
-
+    
     // -----------------------------------
     // Optional: allow admins to join organizer room on demand
     // -----------------------------------
@@ -472,6 +472,7 @@ export default function setupSocket(io) {
         if (ack) ack({ success: false, error: "Server error" });
       }
     });
+    
 
     // -----------------------------------
     // Socket disconnect event

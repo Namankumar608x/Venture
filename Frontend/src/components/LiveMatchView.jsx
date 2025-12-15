@@ -1,14 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import { io } from "socket.io-client";
 
 export default function LiveMatchView() {
-  const { eventId, matchId } = useParams(); // ✅ THIS WAS MISSING
+  const { eventId, matchId } = useParams();
+
+  const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:5005`;
 
   const [match, setMatch] = useState(null);
-  const [scoreA, setScoreA] = useState(0);
-  const [scoreB, setScoreB] = useState(0);
+  const socketRef = useRef(null);
 
   const auth = () => ({
     headers: {
@@ -16,65 +17,88 @@ export default function LiveMatchView() {
     },
   });
 
+  /* ================= INITIAL FETCH ================= */
   const fetchMatch = async () => {
     const res = await axios.get(
-      `http://localhost:5005/events/matches/${matchId}`,
+      `${BACKEND_URL}/events/matches/${matchId}`,
       auth()
     );
-
     setMatch(res.data);
-
-    const activeRound = res.data.rounds?.find(
-      r => r.roundNo === res.data.currentRound && !r.isCompleted
-    );
-
-    if (activeRound) {
-      setScoreA(activeRound.teamA_score);
-      setScoreB(activeRound.teamB_score);
-    }
   };
 
-  // 🔄 INITIAL FETCH
   useEffect(() => {
     fetchMatch();
   }, [matchId]);
 
-  // 🔴 SOCKET FOR LIVE SCORE
- useEffect(() => {
-  if (!eventId || !matchId) return;
+  /* ================= SOCKET ================= */
+  useEffect(() => {
+    if (!eventId || !matchId) return;
+    if (socketRef.current) return; // prevent duplicate sockets
 
-  const socket = io("http://localhost:5005", {
-    auth: {
-      token: localStorage.getItem("accessToken"),
-    },
-    transports: ["websocket"], // 🔥 IMPORTANT
-  });
+    console.log("🟡 [VIEWER] creating socket");
 
-  socket.on("connect", () => {
-    socket.emit("join:event", eventId); // ✅ AFTER CONNECT
-  });
+    const socket = io(BACKEND_URL, {
+      transports: ["websocket"], // 🔥 IMPORTANT FIX
+      auth: {
+        token: localStorage.getItem("accessToken"),
+      },
+    });
 
-  socket.on("match:round:update", data => {
-    if (data.matchId === matchId) {
-      setScoreA(data.teamA_score);
-      setScoreB(data.teamB_score);
-    }
-  });
+    socketRef.current = socket;
 
-  socket.on("match:round:ended", () => {
-    fetchMatch();
-  });
+    socket.on("connect", () => {
+      console.log("🟢 [VIEWER] socket connected:", socket.id);
+      socket.emit("join:event", { eventId });
+    });
 
-  socket.on("match:ended", () => {
-    fetchMatch();
-  });
+    /* 🔥 LIVE SCORE UPDATE */
+    socket.on("match:round:update", (data) => {
+      if (data.matchId !== matchId) return;
 
-  return () => socket.disconnect();
-}, [eventId, matchId]);
+      setMatch((prev) => {
+        if (!prev) return prev;
 
+        return {
+          ...prev,
+          rounds: prev.rounds.map((r) =>
+            r.roundNo === data.roundNo
+              ? {
+                  ...r,
+                  teamA_score: data.teamA_score,
+                  teamB_score: data.teamB_score,
+                }
+              : r
+          ),
+        };
+      });
+    });
+
+    socket.on("match:round:ended", (data) => {
+      if (data.matchId === matchId) fetchMatch();
+    });
+
+    socket.on("match:ended", (data) => {
+      if (data.matchId === matchId) fetchMatch();
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("❌ [VIEWER] socket error:", err.message);
+    });
+
+    return () => {
+      console.log("🔴 [VIEWER] socket disconnected");
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [eventId, matchId]);
 
   if (!match) return null;
 
+  const currentRound = match.rounds.find(
+    (r) => r.roundNo === match.currentRound
+  );
+
+  /* ================= UI ================= */
   return (
     <div className="min-h-screen bg-slate-900 p-6 text-white">
       <div className="bg-slate-800 rounded-xl p-6 max-w-xl mx-auto">
@@ -92,21 +116,27 @@ export default function LiveMatchView() {
         <div className="flex justify-between text-center mb-6">
           <div>
             <p className="mb-2">{match.teamA.teamId.teamname}</p>
-            <p className="text-3xl font-bold">{scoreA}</p>
+            <p className="text-3xl font-bold">
+              {currentRound?.teamA_score ?? 0}
+            </p>
           </div>
 
           <div>
             <p className="mb-2">{match.teamB.teamId.teamname}</p>
-            <p className="text-3xl font-bold">{scoreB}</p>
+            <p className="text-3xl font-bold">
+              {currentRound?.teamB_score ?? 0}
+            </p>
           </div>
         </div>
 
         {/* ROUNDS */}
         <div className="text-sm space-y-1">
-          {match.rounds.map((r, i) => (
-            <div key={i} className="flex justify-between">
+          {match.rounds.map((r) => (
+            <div key={r.roundNo} className="flex justify-between">
               <span>Round {r.roundNo}</span>
-              <span>{r.teamA_score} : {r.teamB_score}</span>
+              <span>
+                {r.teamA_score} : {r.teamB_score}
+              </span>
             </div>
           ))}
         </div>

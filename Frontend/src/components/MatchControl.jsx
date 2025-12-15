@@ -1,15 +1,18 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
 import { io } from "socket.io-client";
 
 export default function MatchControl() {
   const { matchId } = useParams();
-  const [role, setRole] = useState("participant");
 
   const [match, setMatch] = useState(null);
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
+
+  const socketRef = useRef(null);
+
+  const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:5005`;
 
   const auth = () => ({
     headers: {
@@ -20,7 +23,7 @@ export default function MatchControl() {
   /* ================= FETCH MATCH ================= */
   const fetchMatch = async () => {
     const res = await axios.get(
-      `http://localhost:5005/events/matches/${matchId}`,
+      `${BACKEND_URL}/events/matches/${matchId}`,
       auth()
     );
 
@@ -44,32 +47,54 @@ export default function MatchControl() {
     fetchMatch();
   }, [matchId]);
 
-  /* ================= SOCKET ================= */
+  /* ================= SOCKET (FIXED) ================= */
   useEffect(() => {
     if (!match?.eventid) return;
+    if (socketRef.current) return; // 🔥 PREVENT MULTIPLE SOCKETS
 
-    const socket = io("http://localhost:5005", {
-      auth: { token: localStorage.getItem("accessToken") },
+    console.log("🟡 [ADMIN] creating socket");
+
+    const socket = io(BACKEND_URL, {
+      auth: {
+        token: localStorage.getItem("accessToken"),
+      },
     });
 
-    socket.emit("join:event", match.eventid.toString());
+    socketRef.current = socket;
 
-    socket.on("match:round:update", data => {
+    socket.on("connect", () => {
+      console.log("🟢 [ADMIN] socket connected:", socket.id);
+      console.log("🟡 [ADMIN] emitting join:event:", match.eventid.toString());
+
+      socket.emit("join:event", {
+        eventId: match.eventid.toString(),
+      });
+    });
+
+    socket.on("match:round:update", (data) => {
       if (data.matchId === matchId) {
         setScoreA(data.teamA_score);
         setScoreB(data.teamB_score);
       }
     });
 
-    socket.on("match:round:ended", data => {
+    socket.on("match:round:ended", (data) => {
       if (data.matchId === matchId) fetchMatch();
     });
 
-    socket.on("match:ended", data => {
+    socket.on("match:ended", (data) => {
       if (data.matchId === matchId) fetchMatch();
     });
 
-    return () => socket.disconnect();
+    socket.on("connect_error", (err) => {
+      console.error("❌ [ADMIN] socket connect_error:", err.message);
+    });
+
+    return () => {
+      console.log("🔴 [ADMIN] socket disconnected");
+      socket.disconnect();
+      socketRef.current = null;
+    };
   }, [match?.eventid, matchId]);
 
   /* ================= DERIVED STATE ================= */
@@ -83,7 +108,7 @@ export default function MatchControl() {
   /* ================= ACTIONS ================= */
   const startMatch = async () => {
     await axios.post(
-      `http://localhost:5005/events/matches/${matchId}/start`,
+      `${BACKEND_URL}/events/matches/${matchId}/start`,
       {},
       auth()
     );
@@ -94,7 +119,7 @@ export default function MatchControl() {
     if (match.status !== "live" || roundEnded) return;
 
     await axios.put(
-      `http://localhost:5005/events/matches/${matchId}/round/score`,
+      `${BACKEND_URL}/events/matches/${matchId}/round/score`,
       { team, points: val },
       auth()
     );
@@ -130,39 +155,21 @@ export default function MatchControl() {
     if (match.status !== "live" || roundEnded) return;
 
     await axios.post(
-      `http://localhost:5005/events/matches/${matchId}/round/end`,
+      `${BACKEND_URL}/events/matches/${matchId}/round/end`,
       {},
       auth()
     );
-
-    await fetchMatch();
+    fetchMatch();
   };
 
   const endMatch = async () => {
-  try {
-    const res = await axios.post(
-      `http://localhost:5005/events/matches/${matchId}/end`,
+    await axios.post(
+      `${BACKEND_URL}/events/matches/${matchId}/end`,
       {},
       auth()
     );
-
-    await fetchMatch();
-
-    if (res.data?.winnerName) {
-      alert(`Match finished. Winner: ${res.data.winnerName}`);
-    } else {
-      alert("Match finished successfully");
-    }
-  } catch (err) {
-    if (err.response?.status === 404) {
-      alert("End match API not found. Please restart backend.");
-    } else {
-      alert("Failed to end match");
-    }
-    console.error(err);
-  }
-};
-
+    fetchMatch();
+  };
 
   if (!match) return null;
 
