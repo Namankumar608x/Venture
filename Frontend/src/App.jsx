@@ -19,6 +19,8 @@ import EventBracket from "./components/EventBracket";
 import EventMatches from "./components/EventMatches";
 import MatchControl from "./components/MatchControl";
 import EventWinner from "./components/EventWinner";
+import LiveMatchView from "./components/LiveMatchView.jsx";
+
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("accessToken");
@@ -126,11 +128,21 @@ export default function App() {
     </ProtectedRoute>
   }
 />
+<Route
+  path="/events/:clubid/:eventId/matches/:matchId/live"
+  element={
+    <ProtectedRoute>
+      <Layout>
+        <LiveMatchView />
+      </Layout>
+    </ProtectedRoute>
+  }
+/>
 
 
 
   <Route path="*" element={<Login />} />
-
+  
 </Routes>
 
     </>

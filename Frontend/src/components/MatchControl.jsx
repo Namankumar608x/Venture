@@ -5,6 +5,7 @@ import { io } from "socket.io-client";
 
 export default function MatchControl() {
   const { matchId } = useParams();
+  const [role, setRole] = useState("participant");
 
   const [match, setMatch] = useState(null);
   const [scoreA, setScoreA] = useState(0);
@@ -138,16 +139,30 @@ export default function MatchControl() {
   };
 
   const endMatch = async () => {
-    if (match.status !== "live") return;
-
-    await axios.post(
+  try {
+    const res = await axios.post(
       `http://localhost:5005/events/matches/${matchId}/end`,
       {},
       auth()
     );
 
     await fetchMatch();
-  };
+
+    if (res.data?.winnerName) {
+      alert(`Match finished. Winner: ${res.data.winnerName}`);
+    } else {
+      alert("Match finished successfully");
+    }
+  } catch (err) {
+    if (err.response?.status === 404) {
+      alert("End match API not found. Please restart backend.");
+    } else {
+      alert("Failed to end match");
+    }
+    console.error(err);
+  }
+};
+
 
   if (!match) return null;
 

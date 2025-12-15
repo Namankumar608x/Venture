@@ -60,6 +60,10 @@ const io = new IOServer(httpServer, {
 
 // Make io available to REST route handlers via req.app.locals.io
 app.locals.io = io;
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
 
 setupSocket(io);
 

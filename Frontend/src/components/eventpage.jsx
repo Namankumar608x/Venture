@@ -830,7 +830,7 @@ useEffect(() => {
   </Link>
 
   {/* Matches – admin only */}
-  {isAdmin && (
+  {(
     <Link
       to={`/events/${clubid}/${eventId}/matches`}
       className="px-4 py-2 bg-purple-600 text-white rounded-lg"

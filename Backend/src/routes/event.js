@@ -1300,9 +1300,15 @@ router.put(
       return res.status(400).json({ message: "team must be A or B" });
     }
 
+    if (typeof points !== "number" || points < 0) {
+      return res.status(400).json({ message: "Invalid score value" });
+    }
+
     try {
       const match = await Match.findById(matchId);
-      if (!match) return res.status(404).json({ message: "Match not found" });
+      if (!match) {
+        return res.status(404).json({ message: "Match not found" });
+      }
 
       if (match.status !== "live") {
         return res.status(400).json({ message: "Match is not live" });
@@ -1310,55 +1316,87 @@ router.put(
 
       // 🔐 ADMIN / MANAGER CHECK
       const event = await Event.findById(match.eventid);
-      if (
-        !event.admin.map(id => id.toString()).includes(req.user.id) &&
-        !event.managers.map(id => id.toString()).includes(req.user.id)
-      ) {
+      const uid = req.user.id.toString();
+
+      const isAdmin =
+        event.admin.some(id => id.toString() === uid) ||
+        event.managers.some(id => id.toString() === uid);
+
+      if (!isAdmin) {
         return res.status(403).json({ message: "Not authorized" });
       }
 
-      // find or create current round
+      // 🔎 FIND ACTIVE ROUND
       let round = match.rounds.find(
         r => r.roundNo === match.currentRound
       );
 
+      // 🧠 CREATE ROUND ONLY IF IT DOES NOT EXIST
       if (!round) {
-        round = {
+        round = match.rounds.create({
           roundNo: match.currentRound,
           teamA_score: 0,
           teamB_score: 0,
           isCompleted: false
-        };
+        });
         match.rounds.push(round);
       }
 
+      // 🛑 DO NOT UPDATE COMPLETED ROUND
       if (round.isCompleted) {
-        return res.status(400).json({ message: "Round already completed" });
-      }
-
-      if (team === "A") round.teamA_score = points;
-      if (team === "B") round.teamB_score = points;
-
-      await match.save();
-
-      // 🔊 SOCKET EMIT (SAFE)
-      if (req.io) {
-        emitMatchEvent(req.io, match.eventid.toString(), "match:round:update", {
-          matchId,
-          roundNo: round.roundNo,
-          teamA_score: round.teamA_score,
-          teamB_score: round.teamB_score
+        return res.status(400).json({
+          message: "Current round already completed"
         });
       }
 
-      res.json({ message: "Score updated" });
+      // 🧮 UPDATE SCORE ONLY IF CHANGED
+      let changed = false;
+
+      if (team === "A" && round.teamA_score !== points) {
+        round.teamA_score = points;
+        changed = true;
+      }
+
+      if (team === "B" && round.teamB_score !== points) {
+        round.teamB_score = points;
+        changed = true;
+      }
+
+      if (!changed) {
+        return res.json({ message: "No score change" });
+      }
+
+      await match.save();
+
+      // 🔊 SOCKET EMIT — LIVE AUDIENCE UPDATE
+      if (req.io) {
+        emitMatchEvent(
+          req.io,
+          match.eventid.toString(),
+          "match:round:update",
+          {
+            matchId: match._id.toString(),
+            roundNo: round.roundNo,
+            teamA_score: round.teamA_score,
+            teamB_score: round.teamB_score
+          }
+        );
+      }
+
+      return res.json({
+        message: "Score updated",
+        roundNo: round.roundNo,
+        teamA_score: round.teamA_score,
+        teamB_score: round.teamB_score
+      });
 
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Server error" });
+      console.error("[ROUND SCORE ERROR]", err);
+      return res.status(500).json({ message: "Server error" });
     }
   }
 );
+
 router.post(
   "/matches/:matchId/round/end",
   authenticate,
@@ -1442,6 +1480,71 @@ router.post(
     }
   }
 );
+router.post(
+  "/matches/:matchId/end",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { matchId } = req.params;
+
+      const match = await Match.findById(matchId)
+        .populate("teamA.teamId")
+        .populate("teamB.teamId");
+
+      if (!match) {
+        return res.status(404).json({ message: "Match not found" });
+      }
+
+      if (match.status !== "live") {
+        return res.status(400).json({ message: "Match is not live" });
+      }
+
+      // 🧮 COUNT ROUND WINS
+      const wins = {};
+      for (const r of match.rounds) {
+        if (r.isCompleted && r.winner) {
+          wins[r.winner.toString()] =
+            (wins[r.winner.toString()] || 0) + 1;
+        }
+      }
+
+      if (Object.keys(wins).length === 0) {
+        return res.status(400).json({ message: "No completed rounds" });
+      }
+
+      const winnerId = Object.keys(wins).sort(
+        (a, b) => wins[b] - wins[a]
+      )[0];
+
+      match.winner = winnerId;
+      match.status = "finished";
+
+      await match.save();
+
+      // 🔊 SOCKET
+      req.app.locals.io
+        ?.to(`event:${match.eventid}`)
+        .emit("match:ended", {
+          matchId,
+          winnerId
+        });
+
+      return res.json({
+        message: "Match ended",
+        winnerId,
+        winnerName:
+          winnerId === match.teamA.teamId._id.toString()
+            ? match.teamA.teamId.teamname
+            : match.teamB.teamId.teamname
+      });
+
+    } catch (err) {
+      console.error("[MATCH END ERROR]", err);
+      return res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
 
 
 router.put(
