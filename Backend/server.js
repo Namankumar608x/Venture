@@ -20,7 +20,7 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-const PORT = 5005;
+const PORT = process.env.PORT || 5005;
 
 app.use(
   cors({
@@ -29,7 +29,8 @@ app.use(
       if (
         origin.includes("localhost") ||
         origin.includes("127.0.0.1") ||
-        origin.includes("192.168.")
+        origin.includes("192.168.") ||
+        origin.includes("https://venture-flax.vercel.app") 
       ) {
         callback(null, true);
       } else {
@@ -51,14 +52,16 @@ app.use("/events", event);
 app.use("/teams", teams);
 app.use("/schedule", schedule);
 app.use("/notifications", notifications);
-
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK" });
+});
 // 🔥 IMPORTANT: create http server from express
 const httpServer = http.createServer(app);
 
 // 🔥 Attach socket.io to SAME http server
 const io = new IOServer(httpServer, {
   cors: {
-    origin: [/localhost/, /127\.0\.0\.1/, /192\.168\./],
+    origin: [/localhost/, /127\.0\.0\.1/, /192\.168\./,"https://venture-flax.vercel.app"],
     credentials: true,
   },
 });
