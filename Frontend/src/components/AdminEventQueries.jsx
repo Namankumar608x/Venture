@@ -6,7 +6,7 @@ import { useParams } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
 export default function AdminEventQueries() {
   const { clubid, eventId } = useParams();
-  const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://";
+  const BACKEND = import.meta.env.VITE_API_URL || "http://";
 
   const [threads, setThreads] = useState({}); // { userId: { messages: [], user: {...}, unread: 0 } }
   const [participantsOrder, setParticipantsOrder] = useState([]); // ordered participant ids
@@ -55,7 +55,7 @@ export default function AdminEventQueries() {
     const loadAllQueries = async () => {
       try {
         log("GET", `${BACKEND}/events/${eventId}/queries`);
-        const res = await axiosInstance.get(`${BACKEND}/events/${eventId}/queries`, {
+        const res = await axiosInstance.get(`/events/${eventId}/queries`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         log("GET queries response:", res?.data);

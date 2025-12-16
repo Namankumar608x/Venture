@@ -6,7 +6,7 @@ import axiosInstance from "../utils/axiosInstance";
 export default function EventQueries() {
   const { eventId } = useParams();
   const navigate = useNavigate();
-  const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://";
+  const BACKEND = import.meta.env.VITE_API_URL || "http://";
 
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
@@ -31,7 +31,7 @@ export default function EventQueries() {
     const loadHistory = async () => {
       try {
         const res = await axiosInstance.get(
-          `${BACKEND}/events/${eventId}/queries`,
+          `/events/${eventId}/queries`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         setMessages(res.data?.data || []);
