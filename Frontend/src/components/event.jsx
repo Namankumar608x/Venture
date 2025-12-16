@@ -21,7 +21,7 @@ function EventsDashboard() {
   const [isCreating, setIsCreating] = useState(false);
   const navigate = useNavigate();
   const [showShare, setShowShare] = useState(false);
-  const FRONTEND_URL = "https://venture-flax.vercel.app/";
+  const FRONTEND_URL = "https://venture-flax.vercel.app";
   const link = `${FRONTEND_URL}/events/${clubid}/login`;
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
