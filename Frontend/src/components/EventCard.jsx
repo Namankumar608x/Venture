@@ -1,40 +1,30 @@
-// EventCard.jsx
 import React from "react";
 
-const leaveEvent = async (eventId) => {
-  if (!window.confirm("Are you sure you want to leave this event?")) return;
-
-  try {
-    const config = getAuthConfig();
-    if (!config) return;
-
-    await axios.post(
-      "http://localhost:5005/events/leave",
-      { eventid: eventId },
-      config
-    );
-
-    const events = await fetchEventsForClub(selectedClub);
-    setClubEvents(events);
-  } catch (err) {
-    alert(err.response?.data?.message || "Failed to leave event");
-  }
-};
-function EventCard({ event, onOpen }) {
+export default function EventCard({ event, onOpen }) {
   return (
-    <div className="bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3 flex justify-between items-center text-sm text-slate-100">
-      <div>
-        <div className="font-medium">{event.name || "Unnamed Event"}</div>
-        <div className="text-xs text-slate-400">ID: {event._id || event.id}</div>
+    <div 
+      onClick={onOpen}
+      className="group flex items-center gap-4 p-4 rounded-xl bg-slate-800/40 border border-slate-700/50 hover:bg-slate-700/40 hover:border-indigo-500/30 transition-all cursor-pointer"
+    >
+      {/* Icon Placeholder */}
+      <div className="w-12 h-12 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+        <i className="fa-solid fa-trophy text-xl"></i>
       </div>
-      <div className="flex gap-2">
-      
-        <button onClick={onOpen} className="text-xs px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white">
-          Open
-        </button>
+
+      <div className="flex-1 min-w-0">
+        <h4 className="text-white font-semibold text-base truncate group-hover:text-indigo-300 transition-colors">
+          {event.name || "Unnamed Event"}
+        </h4>
+        <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
+          <span className="truncate max-w-[150px]">ID: {event._id}</span>
+          <span className="w-1 h-1 rounded-full bg-slate-600"></span>
+          <span>{new Date(event.createdAt || Date.now()).toLocaleDateString()}</span>
+        </div>
       </div>
+
+      <button className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+        <i className="fa-solid fa-chevron-right text-xs"></i>
+      </button>
     </div>
   );
 }
-
-export default EventCard;

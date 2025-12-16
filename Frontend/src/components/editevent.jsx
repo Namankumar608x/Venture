@@ -17,6 +17,7 @@ export default function EditEventPage() {
     status: "registration",
     imgURL:"",
     Sport:"",
+    teamsBy:""
   });
   const [rules,setRules]=useState([{
     title:"",
@@ -96,7 +97,8 @@ const removePoint = (ruleIndex, pointIndex) => {
         registrationOpen: e.registrationOpen ?? true,
         status: e.status || "registration",
         imgURL:e.imgURL || "",
-        Sport:e.Sport || ""
+        Sport:e.Sport || "",
+        teamsBy:e.teamsBy || "users"
       });
         setRules(
       Array.isArray(e.rules) && e.rules.length > 0
@@ -205,6 +207,21 @@ const removePoint = (ruleIndex, pointIndex) => {
               }
              
             />
+          </div>
+          <div>
+            <label className="text-sm text-slate-400">Team creation by</label>
+            <select
+              className={input}
+              value={form.teamsBy}
+              onChange={(e) =>
+                setForm({ ...form,teamsBy: e.target.value })
+              }
+            >
+              <option value="">Select Team creation right</option>
+              <option value="admin">Admin/Managers only</option>
+              <option value="users">All users</option>
+            
+            </select>
           </div>
            <div>
             <label className="text-sm text-slate-400">Event Type</label>

@@ -117,7 +117,10 @@ export default function TeamManagePage() {
       alert(err.response?.data?.message);
     }
   };
-
+  if(!team) return null;
+const isMember = team.members.some(
+  (m) => m._id.toString() === currentUser
+) || false;
   const proceedToRegister = async () => {
     try {
       const ok = window.confirm(
@@ -270,7 +273,7 @@ export default function TeamManagePage() {
                 Dismantle Team
               </button>
             </>
-          ) : (
+          ) : isMember && (
             <button
               onClick={leaveTeam}
               className="bg-red-600 px-4 py-2 rounded"

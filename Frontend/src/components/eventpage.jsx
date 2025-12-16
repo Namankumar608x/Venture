@@ -1,962 +1,459 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
-
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
-import { Link, useParams } from "react-router-dom";
 
 export default function EventPage() {
-  const { clubid,eventId } = useParams();
-const [admins, setAdmins] = useState([]);
-const [managers, setManagers] = useState([]);
-const [schedules,setschedule]=useState([]);
-const [teams,setteams]=useState([]);
-  const [loading, setLoading] = useState(true);
+  const { clubid, eventId } = useParams();
+  const navigate = useNavigate();
+
+  // Data States
   const [event, setEvent] = useState(null);
   const [role, setRole] = useState("participant");
+  const [schedules, setSchedules] = useState([]);
+  const [teams, setTeams] = useState([]);
+  const [admins, setAdmins] = useState([]);
+  const [managers, setManagers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState("");
-  const [message, setMessage] = useState("");
-const [searchQuery, setSearchQuery] = useState("");
-const [searchResults, setSearchResults] = useState([]);
-  const [scheduleForm, setScheduleForm] = useState({
-    title: "",
-    date: "",
-    time: "",
-    location: "",
-    description: "",
-  });
-  const [rules,setRules]=useState([{
-      title:"",
-      points:[],
-    }]);
-  const navigate=useNavigate();
-    const isAdmin = role === "admin" || role === "manager";
+
+  // UI States
+  const [activeTab, setActiveTab] = useState("overview"); // overview, schedule, teams, admin
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false); // New state for image modal
+
+  // Forms
+  const [scheduleForm, setScheduleForm] = useState({ title: "", date: "", time: "", location: "", description: "" });
   const [teamForm, setTeamForm] = useState({ teamname: "" });
-  const [promoteForm, setPromoteForm] = useState({
-    userid: "",
-    post: "manager",
-  });
+  const [promoteForm, setPromoteForm] = useState({ userid: "", post: "manager" });
   const [updateMsg, setUpdateMsg] = useState("");
-  const [matchForm, setMatchForm] = useState({
-    scheduleid: "",
-    teamA: "",
-    teamB: "",
-    time: "",
-  });
+  const [matchForm, setMatchForm] = useState({ scheduleid: "", teamA: "", teamB: "", time: "" });
   
-useEffect(() => {
-  const delay = setTimeout(() => {
-    if (searchQuery.trim() === "") {
-      setSearchResults([]);
-      return;
-    }
-    console.log(searchQuery)
+  // Search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
 
-   axios.post(
-  "http://localhost:5005/auth/search-users",
-  { q: searchQuery, eventid: eventId },
-  getAuthConfig()
-)
-      .then(res => setSearchResults(res.data))
-      .catch(() => setSearchResults([]));
+  const isAdmin = role === "admin" || role === "manager";
 
-  }, 300); // debounce timeout
-
-  return () => clearTimeout(delay);
-}, [searchQuery]);
-const fetchRoles = async () => {
-  try {
-    const config = getAuthConfig();
-    if (!config) return;
-
-    const res = await axios.get(
-      `http://localhost:5005/events/roles/${eventId}`,
-      config
-    );
-
-    setAdmins(res.data.admins);
-    setManagers(res.data.managers);
-
-  } catch (err) {
-    console.log("Role fetch error:", err.response?.data);
-  }
-};
-const fetchSchedules = async () => {
-  try {
-    const config = getAuthConfig();
-    if (!config) return;
-
-    const res = await axios.get(
-      `http://localhost:5005/events/${eventId}/schedules`,
-      config
-    );
-
-    setschedule(res.data);
-  } catch (err) {
-    console.log("Role fetch error:", err.response?.data);
-  }
-};
-const fetchteams = async () => {
-  try {
-    const config = getAuthConfig();
-    if (!config) return;
-
-    const res = await axios.get(
-      `http://localhost:5005/teams/${eventId}`,
-      config
-    );
-
-    setteams(res.data);
-  } catch (err) {
-    console.log("Role fetch error:", err.response?.data);
-  }
-};
-useEffect(() => {
-  fetchEvent();
-  fetchRoles();
-  fetchSchedules();
-  fetchteams();
-
-}, [eventId]);
-  // -----------------------------------------------------
-  // AUTH HEADER
-  // -----------------------------------------------------
+  // --- Auth Helper ---
   const getAuthConfig = () => {
     let token = localStorage.getItem("accessToken");
     if (!token) return null;
-
     try {
       const payload = jwtDecode(token);
-      setCurrentUser(payload.id); // store logged-in user
-
+      setCurrentUser(payload.id);
       if (payload.exp * 1000 < Date.now()) {
         localStorage.removeItem("accessToken");
         return null;
       }
-    } catch {
-      localStorage.removeItem("accessToken");
-      return null;
-    }
-
+    } catch { return null; }
     return { headers: { Authorization: `Bearer ${token}` } };
   };
 
-  // -----------------------------------------------------
-  // FETCH EVENT
-  // -----------------------------------------------------
-  const fetchEvent = async () => {
-    setLoading(true);
+  // --- Fetchers ---
+  const fetchAllData = async () => {
     try {
       const config = getAuthConfig();
       if (!config) return;
 
-      const res = await axios.get(
-        `http://localhost:5005/events/${eventId}`,
-        config
-      );
+      const [evtRes, roleRes, schRes, teamRes] = await Promise.all([
+        axios.get(`http://localhost:5005/events/${eventId}`, config),
+        axios.get(`http://localhost:5005/events/roles/${eventId}`, config),
+        axios.get(`http://localhost:5005/events/${eventId}/schedules`, config),
+        axios.get(`http://localhost:5005/teams/${eventId}`, config)
+      ]);
 
-      setEvent(res.data.event);
-      setRole(res.data.role);
-      setRules(res.data.event.rules);
-      console.log(rules);
+      setEvent(evtRes.data.event);
+      setRole(evtRes.data.role);
+      setAdmins(roleRes.data.admins);
+      setManagers(roleRes.data.managers);
+      setSchedules(schRes.data);
+      setTeams(teamRes.data);
     } catch (err) {
-      setMessage("Failed to load event");
+      console.error("Load error:", err);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => { fetchAllData(); }, [eventId]);
+
+  // --- Search Users Effect ---
   useEffect(() => {
-    fetchEvent();
-  }, [eventId]);
+    const delay = setTimeout(() => {
+      if (!searchQuery.trim()) { setSearchResults([]); return; }
+      axios.post("http://localhost:5005/auth/search-users", { q: searchQuery }, getAuthConfig())
+        .then(res => setSearchResults(res.data))
+        .catch(() => setSearchResults([]));
+    }, 300);
+    return () => clearTimeout(delay);
+  }, [searchQuery]);
 
- const handleEditEvent = () => {
-  navigate(`/events/${clubid}/${eventId}/edit`);
-};
-  const postAction = async (url, body, successMsg) => {
+  // --- Actions ---
+  const postAction = async (url, body) => {
     try {
-      const config = getAuthConfig();
-      if (!config) return;
-
-      const res=await axios.post(url, body, config);
-     
-      fetchEvent();
-      
-      return res;
-     
+      await axios.post(url, body, getAuthConfig());
+      fetchAllData();
+      alert("Success!");
     } catch (err) {
-      setMessage(err.response?.data?.message || "Action failed");
+      alert(err.response?.data?.message || "Action failed");
     }
   };
 
-  // -----------------------------------------------------
-  // ACTION FUNCTIONS
-  // -----------------------------------------------------
-  const handleSchedule = (e) => {
-    e.preventDefault();
-    postAction(
-      `http://localhost:5005/schedule/${eventId}/new-schedule`,
-      { ...scheduleForm,  },
-      "Schedule created"
-    );
-  };
+  if (loading) return <div className="flex h-screen items-center justify-center text-slate-400">Loading Event...</div>;
 
-  const handleTeamCreate = async(e) => {
-    e.preventDefault();
-    const res=postAction(
-      "http://localhost:5005/teams/new-team",
-      { teamname: teamForm.teamname, eventid: eventId },
-      "Team created"
-    );    
-  setTeamForm({ teamname: "" });
-    await fetchteams();
-    await fetchEvent();
-  };
+  // --- Sub-components for Tabs ---
 
-  const sendJoinRequest = (teamId) => {
-    postAction(
-      "http://localhost:5005/teams/team/join-request",
-      { teamid: teamId },
-      "Join request sent!"
-    );
-  };
-
-  const approveRequest = (teamId, userId) => {
-    postAction(
-      "http://localhost:5005/teams/team/approve-request",
-      { teamid: teamId, userid: userId },
-      "User added to team"
-    );
-  };
-
-  const handlePromote = (e) => {
-    e.preventDefault();
-    postAction(
-      "http://localhost:5005/events/promote",
-      { ...promoteForm, eventid: eventId },
-      "User promoted"
-    );
-  };
-
-  const handleUpdate = (e) => {
-    e.preventDefault();
-    postAction(
-      "http://localhost:5005/events/updates",
-      { eventid: eventId, message: updateMsg },
-      "Update posted"
-    );
-    setUpdateMsg("");
-  };
-
-  const handleMatch = (e) => {
-    e.preventDefault();
-    postAction(
-      "http://localhost:5005/events/match/create",
-      { ...matchForm, eventid: eventId },
-      "Match created"
-    );
-  };
-
-  // -----------------------------------------------------
-  // UI UTIL CLASSES
-  // -----------------------------------------------------
-  const card =
-    "bg-slate-800/50 border border-slate-700 shadow-lg rounded-xl p-5";
-  const input =
-    "w-full px-3 py-2 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 focus:outline-none";
-
-  // -----------------------------------------------------
-  // LOADING STATE
-  // -----------------------------------------------------
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center text-slate-300">
-        Loading event...
-      </div>
-    );
-    ///handleing query msg
-    const handleQueryNavigation = () => {
-  console.log("[EventPage] Navigate to query page, role =", role);
-
-  if (role === "participant") {
-    navigate(`/events/${clubid}/${eventId}/query`);
-  } else {
-    navigate(`/events/${clubid}/${eventId}/queries/admin`);
-  }
-};
-
-  // -----------------------------------------------------
-  // MAIN UI
-  // -----------------------------------------------------
-  return (
-    <div className="min-h-screen bg-slate-900 p-6 text-white">
-      <div className="max-w-6xl mx-auto space-y-6">
-
-        {/* HEADER */}
-        {/* HEADER */}
-<div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-
-  {/* LEFT: EVENT INFO */}
-  <div className="space-y-1">
-    <h1 className="text-3xl font-bold">{event?.name}</h1>
-
-    <p className="text-slate-400 text-sm">
-      Event description: {event?.description}
-    </p>
-
-    <p className="text-slate-400 text-sm">
-      Event ID: {event?._id}
-    </p>
-
-    <p className="text-xs text-blue-400 mt-1">
-      Role: {role}
-    </p>
-  </div>
-
-  {/* RIGHT: EVENT BANNER */}
-  {event?.imgURL && (
-    <img
-      src={event.imgURL}
-      alt="Event banner"
-      className="w-full md:w-64 h-60 object-cover rounded-xl border border-white/20"
-    />
-  )}
-
-</div>
-
-    
-        <div className={card}>
+  const OverviewTab = () => (
+    <div className="space-y-6 animate-fade-in">
+      <div className="grid md:grid-cols-3 gap-6">
+        {/* Banner / Info */}
+        <div className="md:col-span-2 space-y-6">
           
- < div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
- 
-  
- <h3 className="font-semibold mb-3">Event Roles</h3>
-  {/* QUERY / MANAGE BUTTON */}
-  <button
-    onClick={handleQueryNavigation}
-    className={`
-      px-5 py-2 rounded-xl font-medium shadow-md transition
-      ${role === "participant"
-        ? "bg-indigo-600 hover:bg-indigo-700"
-        : "bg-emerald-600 hover:bg-emerald-700"}
-    `}
-  >
-    {role === "participant" ? "Raise a Query" : "Manage Queries"}
-  </button>
-   {/* EDIT EVENT (only admin / manager) */}
-  {role !== "participant" && (
-    <button
-      onClick={handleEditEvent}
-      className="px-5 py-2 rounded-xl font-medium bg-yellow-600 hover:bg-yellow-700 shadow-md transition"
-    >
-      Edit Event Details
-    </button>
-  )}
-  
-</div>
-
-
-  <div className="mb-3">
-    <h4 className="text-sm text-blue-400 mb-1">Admins</h4>
-    {admins.length === 0 ? (
-      <p className="text-xs text-slate-500">No admins</p>
-    ) : (
-      admins.map(a => (
-        <p key={a._id} className="text-sm">
-          {a.username} — <span className="text-slate-400">{a.email}</span>
-        </p>
-      ))
-    )}
-  </div>
-  <div>
-    <h4 className="text-sm text-emerald-400 mb-1">Managers</h4>
-    {managers.length === 0 ? (
-      <p className="text-xs text-slate-500">No managers</p>
-    ) : (
-      managers.map(m => (
-        <p key={m._id} className="text-sm">
-          {m.username} — <span className="text-slate-400">{m.email}</span>
-        </p>
-      ))
-    )}
-  </div>
-  </div>
-  <div className={card}>
-  <h3 className="text-2xl font-semibold mb-4">
-    Rules & Guidelines
-  </h3>
-
-  {rules.length === 0 ? (
-    <p className="text-slate-400 text-sm">
-      No rules have been added for this event.
-    </p>
-  ) : (
-    <div className="space-y-4">
-
-      {rules.map((rule, ruleIndex) => (
-        <div
-          key={ruleIndex}
-          className="p-4 bg-slate-700/40 rounded-lg border border-slate-600"
-        >
-          {/* RULE TITLE */}
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center text-sm font-bold">
-              {ruleIndex + 1}
-            </div>
-            <h4 className="text-lg font-semibold">
-              {rule.title}
-            </h4>
-          </div>
-
-          {/* RULE POINTS */}
-          <ul className="list-disc list-inside space-y-1 text-slate-300 text-sm pl-10">
-            {rule.points.map((point, pointIndex) => (
-              <li key={pointIndex}>{point}</li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
-  )}
-</div>
-
-
-
-        <div className="grid lg:grid-cols-3 gap-6">
-          
-
-          {/* ---------------- SCHEDULES ---------------- */}
-          <div className={`${card} lg:col-span-2`}>
-                <h2 className="text-xl font-semibold mb-4">Schedules</h2>
-  
-
-    <div className="space-y-3 mb-4">
-      {schedules.length === 0 ? (
-        <p className="text-slate-400 text-sm">No schedules yet.</p>
-      ) : (
-        schedules.map((s) => (
-          <div
-            key={s._id}
-            onClick={() => navigate(`/events/${clubid}/${eventId}/${s._id}`)}
-            className="p-3 bg-slate-700/50 rounded-lg border border-slate-600"
-          >
-            <div className="font-medium">{s.title}</div>
-            <div className="text-xs text-slate-400">
-              {s.date} • {s.time}
-            </div>
-            <div className="text-xs text-slate-400">{s.location}</div>
-            {s.description && (
-              <div className="text-sm text-slate-300 mt-1">
-                {s.description}
+          {/* IMAGE BANNER */}
+          {event?.imgURL ? (
+            <div 
+              className="relative w-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700 group cursor-pointer"
+              onClick={() => setShowImageModal(true)}
+            >
+              <img 
+                src={event.imgURL} 
+                alt={event.name} 
+                className="w-full h-auto max-h-[500px] object-cover transition-transform duration-500 group-hover:scale-105"
+                onError={(e) => { e.target.style.display = 'none'; }} 
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/20 to-transparent flex flex-col justify-end p-6 transition-opacity duration-300 group-hover:opacity-90">
+                <h2 className="text-3xl font-bold text-white mb-2 shadow-black drop-shadow-md">{event?.name}</h2>
+                <div className="flex flex-wrap gap-3">
+                    <div className="px-3 py-1 bg-indigo-600/90 backdrop-blur-sm rounded-lg text-xs text-white border border-indigo-400/30 font-medium shadow-sm">
+                      <i className="fa-solid fa-users mr-2"></i>Max Team Size: {event?.maxPlayer}
+                    </div>
+                    <div className="px-3 py-1 bg-emerald-600/90 backdrop-blur-sm rounded-lg text-xs text-white border border-emerald-400/30 font-medium shadow-sm">
+                      <i className="fa-solid fa-user-shield mr-2"></i>Role: {role.toUpperCase()}
+                    </div>
+                </div>
               </div>
               
-            )}
-           
+              {/* Expand Hint */}
+              <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-md p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 border border-white/10">
+                <i className="fa-solid fa-expand text-white"></i>
+              </div>
+            </div>
+          ) : (
+            /* Fallback Gradient Banner if no image */
+            <div className="glass-panel p-6 rounded-2xl relative overflow-hidden min-h-[200px] flex flex-col justify-center">
+              <div className="absolute top-0 right-0 p-4 opacity-10">
+                <i className="fa-solid fa-calendar-star text-9xl"></i>
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">{event?.name}</h2>
+              <div className="flex flex-wrap gap-3 mt-4">
+                <div className="px-3 py-1 bg-slate-900/50 rounded-lg text-xs text-slate-400 border border-slate-700">
+                  <i className="fa-solid fa-users mr-2"></i>Max Team Size: {event?.maxPlayer}
+                </div>
+                <div className="px-3 py-1 bg-slate-900/50 rounded-lg text-xs text-slate-400 border border-slate-700">
+                  <i className="fa-solid fa-user-shield mr-2"></i>Role: {role.toUpperCase()}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Description */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <h3 className="text-lg font-bold text-white mb-3">About Event</h3>
+            <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">{event?.description || "No description provided."}</p>
           </div>
-        ))
+
+          {/* RULES SECTION (Restored) */}
+          {event?.rules && event.rules.length > 0 && (
+            <div className="glass-panel p-6 rounded-2xl border-l-4 border-indigo-500">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <i className="fa-solid fa-scale-balanced text-indigo-400"></i> Rules & Guidelines
+              </h3>
+              <div className="space-y-4">
+                {event.rules.map((rule, idx) => (
+                  <div key={idx} className="bg-slate-800/30 p-4 rounded-xl">
+                    {rule.title && <h4 className="font-semibold text-slate-200 mb-2 text-sm uppercase tracking-wide">{rule.title}</h4>}
+                    {rule.points && rule.points.length > 0 && (
+                      <ul className="list-disc list-inside space-y-1 text-slate-400 text-sm marker:text-indigo-500">
+                        {rule.points.map((point, pIdx) => (
+                          <li key={pIdx}>{point}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Updates Feed */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <i className="fa-solid fa-bullhorn text-indigo-400"></i> Announcements
+            </h3>
+            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+              {event?.updates?.length > 0 ? (
+                event.updates.slice().reverse().map((u) => (
+                  <div key={u._id} className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                    <p className="text-slate-200 text-sm mb-2">{u.message}</p>
+                    <span className="text-xs text-slate-500">{new Date(u.createdAt).toLocaleString()}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-slate-500 italic">No announcements yet.</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Sidebar Info */}
+        <div className="space-y-6">
+          <div className="glass-panel p-5 rounded-2xl">
+            <h3 className="font-semibold text-slate-200 mb-3">Key People</h3>
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">Admins</p>
+                {admins.map(a => <div key={a._id} className="text-sm text-slate-300">{a.username}</div>)}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">Managers</p>
+                {managers.length ? managers.map(m => <div key={m._id} className="text-sm text-slate-300">{m.username}</div>) : <span className="text-xs text-slate-600">-</span>}
+              </div>
+            </div>
+          </div>
+
+          <div className="glass-panel p-5 rounded-2xl">
+            <h3 className="font-semibold text-slate-200 mb-3">Quick Links</h3>
+            <div className="flex flex-col gap-2">
+              <Link to={`/events/${clubid}/${eventId}/bracket`} className="btn-secondary text-sm text-center">Tournament Bracket</Link>
+              <Link to={`/events/${clubid}/${eventId}/matches`} className="btn-secondary text-sm text-center">All Matches</Link>
+              <Link to={role === "participant" ? `/events/${clubid}/${eventId}/query` : `/events/${clubid}/${eventId}/queries/admin`} className="btn-secondary text-sm text-center">
+                {role === "participant" ? "Support / Help" : "Manage Queries"}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const ScheduleTab = () => (
+    <div className="grid lg:grid-cols-3 gap-6 animate-fade-in">
+      <div className="lg:col-span-2 space-y-4">
+        {schedules.map(s => (
+          <div key={s._id} onClick={() => navigate(`/events/${clubid}/${eventId}/${s._id}`)} className="glass-panel p-4 rounded-xl hover:border-indigo-500/50 cursor-pointer transition-all flex justify-between items-center group">
+            <div>
+              <h4 className="font-bold text-white group-hover:text-indigo-400 transition-colors">{s.title}</h4>
+              <p className="text-xs text-slate-400 mt-1"><i className="fa-regular fa-clock mr-1"></i> {s.date} • {s.time} <span className="mx-2">•</span> <i className="fa-solid fa-location-dot mr-1"></i> {s.location}</p>
+            </div>
+            <i className="fa-solid fa-chevron-right text-slate-600 group-hover:text-indigo-500"></i>
+          </div>
+        ))}
+        {schedules.length === 0 && <div className="text-slate-500 text-center py-10">No schedules posted.</div>}
+      </div>
+
+      {isAdmin && (
+        <div className="glass-panel p-5 rounded-2xl h-fit">
+          <h3 className="font-bold text-white mb-4">Create Schedule</h3>
+          <form onSubmit={(e) => { e.preventDefault(); postAction(`http://localhost:5005/schedule/${eventId}/new-schedule`, scheduleForm); }} className="space-y-3">
+            <input className="input-field text-sm" placeholder="Title" onChange={e => setScheduleForm({ ...scheduleForm, title: e.target.value })} />
+            <div className="grid grid-cols-2 gap-2">
+              <input type="date" className="input-field text-sm" onChange={e => setScheduleForm({ ...scheduleForm, date: e.target.value })} />
+              <input type="time" className="input-field text-sm" onChange={e => setScheduleForm({ ...scheduleForm, time: e.target.value })} />
+            </div>
+            <input className="input-field text-sm" placeholder="Location" onChange={e => setScheduleForm({ ...scheduleForm, location: e.target.value })} />
+            <textarea className="input-field text-sm h-20" placeholder="Description" onChange={e => setScheduleForm({ ...scheduleForm, description: e.target.value })} />
+            <button className="btn-primary w-full text-sm">Add Schedule</button>
+          </form>
+        </div>
       )}
     </div>
+  );
 
-
-            {/* Admin-only create schedule */}
-            
-            {role !== "participant" && (
-              
-              <form onSubmit={handleSchedule} className="space-y-3">
-            
-                <input
-                  className={input}
-                  placeholder="Title"
-                  onChange={(e) =>
-                    setScheduleForm({ ...scheduleForm, title: e.target.value })
-                  }
-                />
-                <div className="flex gap-3">
-                  <input
-                    type="date"
-                    className={input}
-                    onChange={(e) =>
-                      setScheduleForm({ ...scheduleForm, date: e.target.value })
-                    }
-                  />
-                  <input
-                    type="time"
-                    className={input}
-                    onChange={(e) =>
-                      setScheduleForm({ ...scheduleForm, time: e.target.value })
-                    }
-                  />
-                </div>
-                <input
-                  className={input}
-                  placeholder="Location"
-                  onChange={(e) =>
-                    setScheduleForm({
-                      ...scheduleForm,
-                      location: e.target.value,
-                    })
-                  }
-                />
-                <textarea
-                  className={input}
-                  placeholder="Description"
-                  onChange={(e) =>
-                    setScheduleForm({
-                      ...scheduleForm,
-                      description: e.target.value,
-                    })
-                  }
-                />
-                <button className="px-4 py-2 bg-blue-600 rounded-lg">
-                  Create Schedule
-                </button>
-              </form>
-            )}
-          </div>
-          
-
-              {/* ---------------- TEAMS ---------------- */}
-   <div className={card}>
-  <h2 className="text-xl font-semibold mb-4">Teams</h2>
-    <h3 className="text-lg font-semibold text-green-400 mb-2">Max team length: {event?.maxPlayer}</h3>
-
-  {/* ---------------- MY TEAM SECTION ---------------- */}
-  <h3 className="text-lg font-semibold text-blue-400 mb-2">My Team</h3>
-
-  {(() => {
-    const myTeam = teams.find((t) =>
-      t.members.some(m => String(m._id) === String(currentUser))
-    );
-
-    if (!myTeam) {
-      return (
-        <div className="p-3 bg-slate-800/40 rounded-lg border border-slate-700">
-          <p className="text-slate-400 text-sm mb-3">
-            You are not part of any team.
-          </p>
-
-         {/* Create team form */}
-{event.teamsBy === "admin" ? (
-  role !== "participant" ? (
-    event.status === "registration" ? (
-      <form onSubmit={handleTeamCreate} className="flex gap-2 mb-3">
-        <input
-          className={input}
-          placeholder="Team name"
-          value={teamForm.teamname}
-          onChange={(e) =>
-            setTeamForm({ teamname: e.target.value })
-          }
-        />
-        <button className="px-3 bg-blue-600 rounded-lg">
-          Create
-        </button>
-      </form>
-    ) : (
-      <p className="text-slate-400">
-        Registration currently closed
-      </p>
-    )
-  ) : (
-    <p className="text-slate-400">
-      Registration can be done only by admin
-    </p>
-  )
-) : (
-  event.status === "registration" ? (
-    <form onSubmit={handleTeamCreate} className="flex gap-2 mb-3">
-      <input
-        className={input}
-        placeholder="Team name"
-        value={teamForm.teamname}
-        onChange={(e) =>
-          setTeamForm({ teamname: e.target.value })
-        }
-      />
-      <button className="px-3 bg-blue-600 rounded-lg">
-        Create
-      </button>
-    </form>
-  ) : (
-    <p className="text-slate-400">
-      Registration currently closed
-    </p>
-  )
-)}
-
-
-         
-        </div>
-      );
-    }
-
-    // If user IS in a team
+  const TeamsTab = () => {
+    const myTeam = teams.find(t => t.members.some(m => String(m._id) === String(currentUser)));
+    
     return (
-      <div className="p-3 bg-slate-700/40 rounded-lg border border-slate-600 mb-4">
-        <div className="flex justify-between items-center">
-          <p className="font-medium text-lg">{myTeam.teamname}</p>
-
-          {myTeam.leader?._id === currentUser ? (
-            <button
-              onClick={() =>
-                navigate(`/events/${clubid}/${eventId}/team/${myTeam._id}`)
-              }
-              className="px-2 py-1 text-xs bg-blue-600 rounded"
-            >
-              Manage Team
-            </button>
-          ):(
- <button
-              onClick={() =>
-                navigate(`/events/${clubid}/${eventId}/team/${myTeam._id}`)
-              }
-              className="px-2 py-1 text-xs bg-blue-600 rounded"
-            >
-             View Team
-            </button>
+      <div className="space-y-8 animate-fade-in">
+        {/* My Team Section */}
+        <div className="glass-panel p-6 rounded-2xl bg-gradient-to-r from-slate-800 to-slate-900">
+          <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">My Status</h3>
+          {myTeam ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-2xl font-bold text-indigo-400">{myTeam.teamname}</h4>
+                <p className="text-sm text-slate-400">Leader: {myTeam.leader?.username} • Members: {myTeam.members.length}</p>
+              </div>
+              <button onClick={() => navigate(`/events/${clubid}/${eventId}/team/${myTeam._id}`)} className="btn-primary text-sm">
+                Manage Team
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+              <p className="text-slate-400 text-sm">You are not in a team yet.</p>
+              {/* Only show create if allowed */}
+              {(isAdmin || event.teamsBy !== "admin") && event.status === "registration" && (
+                <form onSubmit={(e) => { e.preventDefault(); postAction("http://localhost:5005/teams/new-team", { teamname: teamForm.teamname, eventid: eventId }); }} className="flex gap-2 w-full md:w-auto">
+                  <input className="input-field text-sm py-2" placeholder="New Team Name" value={teamForm.teamname} onChange={e => setTeamForm({ teamname: e.target.value })} />
+                  <button className="btn-primary py-2 text-sm whitespace-nowrap">Create Team</button>
+                </form>
+              )}
+            </div>
           )}
         </div>
 
-        <div className="text-xs text-slate-400 mt-1">
-          Leader: {myTeam.leader?.username}
-        </div>
-     
-
-        <div className="text-xs text-slate-400">
-          Members: {myTeam.members.length}
-        </div>
-          <div className="flex">
-  {myTeam.isRegistered ? (
-    <div className="ml-auto px-2 py-1 text-xs bg-green-600 text-white rounded">
-      Registered
-    </div>
-  ) : (
-    <div className="ml-auto px-2 py-1 text-xs bg-red-600 text-white rounded">
-      Not Registered
-    </div>
-  )}
-</div>
-      </div>
-    );
-  })()}
-  {/* ---------------- ADMIN: REGISTERED TEAMS DETAILS ---------------- */}
-{isAdmin ? (
-  <div className={card}>
-    <h2 className="text-2xl font-semibold mb-4 text-emerald-400">
-      Registered Teams – Admin View
-    </h2>
-
-    {teams.filter(t => t.isRegistered).length === 0 ? (
-      <p className="text-slate-400 text-sm">
-        No teams have registered yet.
-      </p>
-    ) : (
-      <div className="space-y-4">
-        {teams
-          .filter(t => t.isRegistered)
-          .map((team) => (
-            <div
-              key={team._id}
-              className="p-4 bg-slate-700/40 rounded-lg border border-slate-600"
-            >
-              {/* TEAM HEADER */}
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-lg font-semibold">
-                  {team.teamname}
-                </h3>
-
-                <button
-                  onClick={() =>
-                    navigate(
-                      `/events/${clubid}/${eventId}/team/${team._id}`
-                    )
-                  }
-                  className="px-3 py-1 text-xs bg-indigo-600 rounded"
-                >
-                  View Team
+        {/* All Teams Grid */}
+        <div>
+          <h3 className="text-lg font-bold text-white mb-4">All Teams ({teams.length})</h3>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {teams.filter(t => t.isRegistered).map(t => (
+              <div key={t._id} className={`p-4 rounded-xl border transition-all ${t.isRegistered ? 'bg-slate-800/60 border-emerald-500/30' : 'bg-slate-800/30 border-slate-700'}`}>
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-bold text-slate-200">{t.teamname}</h4>
+                  {t.isRegistered && <i className="fa-solid fa-circle-check text-emerald-500" title="Registered"></i>}
+                </div>
+                <p className="text-xs text-slate-500 mb-3">Leader: {t.leader?.username}</p>
+                <button onClick={() => navigate(`/events/${clubid}/${eventId}/team/${t._id}`)} className="text-xs text-indigo-400 hover:text-indigo-300 font-medium">
+                  View Details →
                 </button>
               </div>
-
-              {/* LEADER */}
-              <p className="text-sm text-slate-300">
-                <span className="text-slate-400">Leader:</span>{" "}
-                {team.leader?.username} — {team.leader?.email}
-              </p>
-
-              {/* MEMBERS */}
-              <p className="text-sm text-slate-400 mt-2 mb-1">
-                Members ({team.members.length}/{event?.maxPlayer})
-              </p>
-
-              <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
-                {team.members.map((m) => (
-                  <li key={m._id}>
-                    {m.username} — {m.email}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-      </div>
-    )}
-  </div>
-):(
-  <>
-  <h3 className="text-lg font-semibold text-emerald-400 mt-4 mb-2">
-    Registered Teams
-  </h3>
-
-  {teams.filter(t => t.isRegistered).length === 0 ? (
-    <p className="text-slate-400 text-sm">No registered teams yet.</p>
-  ) : (
-    teams
-      .filter(t => t.isRegistered)
-      .map((t) => (
-        <div
-          key={t._id}
-          className="p-3 bg-slate-700/40 rounded-lg border border-slate-600 mb-3"
-        >
-          <div className="font-medium flex justify-between items-center">
-            <span>{t.teamname}</span>
-          </div>
-
-          <div className="text-xs text-slate-400">
-            Leader: {t.leader?.username}
-          </div>
-
-          <div className="text-xs text-slate-400">
-            Members: {t.members.length}
+            ))}
           </div>
         </div>
-      ))
-  )}
-  </>
-)}
-
-
-  {/* ---------------- REGISTERED TEAMS ---------------- */}
-  
-</div>
-        
-</div>
-        {/* ---------------- ADMIN PANEL ---------------- */}
-        {role !== "participant" && (
-          <div className="grid lg:grid-cols-3 gap-6">
-
-            {/* Promote */}
-            <div className={card}>
-              <h3 className="font-semibold mb-2">Promote User</h3>
-              <form onSubmit={handlePromote} className="space-y-2">
-               <input
-  className={input}
-  placeholder="Search username or email"
-  value={searchQuery}
-  onChange={(e) => {
-    setSearchQuery(e.target.value);
-    setPromoteForm({
-      ...promoteForm,
-      userid: e.target.value,   // still store input
-    });
-  }}
-/>
-{searchResults.length > 0 && (
-  <div className="mt-1 bg-gray-800 rounded-lg p-2 max-h-48 overflow-y-auto">
-    {searchResults.map((u) => (
-      <div
-        key={u._id}
-        className="p-2 hover:bg-gray-700 cursor-pointer rounded-md"
-        onClick={() => {
-          setPromoteForm({ ...promoteForm, userid: u._id });
-          setSearchQuery(u.username || u.email);
-          setSearchResults([]);
-        }}
-      >
-        <p className="text-sm font-semibold">{u.username}</p>
-        <p className="text-xs text-gray-400">{u.email}</p>
       </div>
-    ))}
-  </div>
-)}
+    );
+  };
 
-                <select
-                  className={input}
-                  value={promoteForm.post}
-                  onChange={(e) =>
-                    setPromoteForm({ ...promoteForm, post: e.target.value })
-                  }
-                >
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <button className="px-3 py-2 bg-blue-600 rounded-lg w-full">
-                  Promote
-                </button>
-              </form>
-            </div>
-
-            {/* Updates */}
-            <div className={card}>
-              <h3 className="font-semibold mb-2">Post Update</h3>
-              <form onSubmit={handleUpdate} className="space-y-2">
-                <textarea
-                  className={input}
-                  placeholder="Write update..."
-                  value={updateMsg}
-                  onChange={(e) => setUpdateMsg(e.target.value)}
-                />
-                <button className="px-3 py-2 bg-emerald-600 rounded-lg w-full">
-                  Post Update
-                </button>
-              </form>
-            </div>
-
-            {/* Create Match */}
-            <div className={card}>
-              <h3 className="font-semibold mb-2">Create Match</h3>
-              <form onSubmit={handleMatch} className="space-y-2">
-                <select
-                  className={input}
-                  value={matchForm.scheduleid}
-                  onChange={(e) =>
-                    setMatchForm({ ...matchForm, scheduleid: e.target.value })
-                  }
-                >
-                  <option value="">Select schedule</option>
-                  {schedules.map((s) => (
-                    <option key={s._id} value={s._id}>
-                      {s.title} — {s.date}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  className={input}
-                  value={matchForm.teamA}
-                  onChange={(e) =>
-                    setMatchForm({ ...matchForm, teamA: e.target.value })
-                  }
-                >
-                  <option value="">Team A</option>
-                  {event.teams .filter((t) => t.isRegistered).map((t) => (
-                    <option key={t._id} value={t._id}>
-                      {t.teamname}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  className={input}
-                  value={matchForm.teamB}
-                  onChange={(e) =>
-                    setMatchForm({ ...matchForm, teamB: e.target.value })
-                  }
-                >
-                  <option value="">Team B</option>
-                  {event.teams .filter((t) => t.isRegistered).map((t) => (
-                    <option key={t._id} value={t._id}>
-                      {t.teamname}
-                    </option>
-                  ))}
-                </select>
-
-                <input
-                  type="time"
-                  className={input}
-                  placeholder="Match time"
-                  value={matchForm.time}
-                  onChange={(e) =>
-                    setMatchForm({ ...matchForm, time: e.target.value })
-                  }
-                />
-
-                <button className="px-3 py-2 bg-rose-600 rounded-lg w-full">
-                  Create Match
-                </button>
-              </form>
-            </div>
-          </div>
-        )
-      }
-
-        {/* ---------------- UPDATES ---------------- */}
-        <div className={card}>
-          <h2 className="text-xl font-semibold mb-3">Updates</h2>
-          <div className="space-y-3">
-            {event?.updates?.length > 0 ? (event.updates
-              .slice()
-              .reverse()
-              .map((u) => (
-                <div
-                  key={u._id}
-                  className="p-3 bg-slate-700/40 rounded border border-slate-600"
-                >
-                  <div className="text-xs text-slate-400">
-                    {new Date(u.createdAt).toLocaleString()}
-                  </div>
-                  <div className="text-slate-200 mt-1">{u.message}</div>
+  const AdminTab = () => (
+    <div className="grid lg:grid-cols-2 gap-6 animate-fade-in">
+      {/* Promote User */}
+      <div className="glass-panel p-6 rounded-2xl">
+        <h3 className="font-bold text-white mb-4">Promote Members</h3>
+        <div className="space-y-4">
+          <input 
+            className="input-field" 
+            placeholder="Search user to promote..." 
+            value={searchQuery} 
+            onChange={e => { setSearchQuery(e.target.value); setPromoteForm({ ...promoteForm, userid: e.target.value }); }} 
+          />
+          {searchResults.length > 0 && (
+            <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden max-h-40 overflow-y-auto">
+              {searchResults.map(u => (
+                <div key={u._id} onClick={() => { setPromoteForm({ ...promoteForm, userid: u._id }); setSearchQuery(u.username); setSearchResults([]); }} className="p-2 hover:bg-slate-700 cursor-pointer text-sm px-4">
+                  {u.username} <span className="text-slate-500 text-xs">({u.email})</span>
                 </div>
-              ))):
-               <div
-                   
-                  className="p-3 bg-slate-700/40 rounded border border-slate-600"
-                > No updates
-                </div>
-
-                }
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <select className="input-field" value={promoteForm.post} onChange={e => setPromoteForm({ ...promoteForm, post: e.target.value })}>
+              <option value="manager">Manager</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button onClick={(e) => { e.preventDefault(); postAction("http://localhost:5005/events/promote", { ...promoteForm, eventid: eventId }); }} className="btn-primary">Promote</button>
           </div>
         </div>
-
-        {/* Global message */}
-        {message && (
-          <div className="p-3 rounded bg-slate-700 text-center">{message}</div>
-        )}
-     
       </div>
-      <div className="flex flex-wrap gap-3 mb-6">
 
-  {/* Brackets – everyone */}
-  <Link
-    to={`/events/${clubid}/${eventId}/bracket`}
-    className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
-  >
-    Brackets
-  </Link>
+      {/* Post Update */}
+      <div className="glass-panel p-6 rounded-2xl">
+        <h3 className="font-bold text-white mb-4">Post Announcement</h3>
+        <textarea className="input-field h-32 mb-4" placeholder="What's happening?" value={updateMsg} onChange={e => setUpdateMsg(e.target.value)} />
+        <button onClick={(e) => { e.preventDefault(); postAction("http://localhost:5005/events/updates", { eventid: eventId, message: updateMsg }); setUpdateMsg(""); }} className="btn-primary w-full">Post</button>
+      </div>
 
-  {/* Matches – admin only */}
-  {(
-    <Link
-      to={`/events/${clubid}/${eventId}/matches`}
-      className="px-4 py-2 bg-purple-600 text-white rounded-lg"
-    >
-      Matches
-    </Link>
-  )}
-
-  {/* Queries – role based */}
-  <Link
-    to={
-      role === "participant"
-        ? `/events/${clubid}/${eventId}/query`
-        : `/events/${clubid}/${eventId}/queries/admin`
-    }
-    className="px-4 py-2 bg-slate-700 text-white rounded-lg"
-  >
-    Queries
-  </Link>
-
-  {/* Admin panel */}
-  {isAdmin && (
-    <Link
-      to={`/events/${clubid}/${eventId}/edit`}
-      className="px-4 py-2 bg-emerald-600 text-white rounded-lg"
-    >
-      Admin Panel
-    </Link>
-  )}
-</div>
-
-
+      {/* Match Creation */}
+      <div className="glass-panel p-6 rounded-2xl lg:col-span-2">
+        <h3 className="font-bold text-white mb-4">Quick Match Creation</h3>
+        <div className="grid md:grid-cols-4 gap-3">
+          <select className="input-field text-sm" onChange={e => setMatchForm({ ...matchForm, scheduleid: e.target.value })}>
+            <option value="">Select Schedule</option>
+            {schedules.map(s => <option key={s._id} value={s._id}>{s.title}</option>)}
+          </select>
+          <select className="input-field text-sm" onChange={e => setMatchForm({ ...matchForm, teamA: e.target.value })}>
+            <option value="">Team A</option>
+            {teams.filter(t => t.isRegistered).map(t => <option key={t._id} value={t._id}>{t.teamname}</option>)}
+          </select>
+          <select className="input-field text-sm" onChange={e => setMatchForm({ ...matchForm, teamB: e.target.value })}>
+            <option value="">Team B</option>
+            {teams.filter(t => t.isRegistered).map(t => <option key={t._id} value={t._id}>{t.teamname}</option>)}
+          </select>
+          <button onClick={(e) => { e.preventDefault(); postAction("http://localhost:5005/events/match/create", { ...matchForm, eventid: eventId }); }} className="btn-danger text-sm">Create Match</button>
+        </div>
+      </div>
     </div>
-   
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
+        <div>
+          <div className="flex items-center gap-3 text-sm text-slate-400 mb-1">
+            <Link to="/home" className="hover:text-white">Home</Link>
+            <i className="fa-solid fa-chevron-right text-[10px]"></i>
+            <span className="text-white">Event Dashboard</span>
+          </div>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight">{event?.name}</h1>
+        </div>
+        {isAdmin && (
+          <button onClick={() => navigate(`/events/${clubid}/${eventId}/edit`)} className="btn-secondary text-sm">
+            <i className="fa-solid fa-gear mr-2"></i>Settings
+          </button>
+        )}
+      </div>
+
+      {/* TABS */}
+      <div className="flex gap-2 overflow-x-auto pb-2 border-b border-slate-800">
+        {[
+          { id: "overview", label: "Overview", icon: "fa-chart-pie" },
+          { id: "schedule", label: "Schedule", icon: "fa-calendar-days" },
+          { id: "teams", label: "Teams", icon: "fa-people-group" },
+          ...(isAdmin ? [{ id: "admin", label: "Admin Tools", icon: "fa-toolbox" }] : [])
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${
+              activeTab === tab.id 
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20" 
+                : "text-slate-400 hover:text-white hover:bg-slate-800"
+            }`}
+          >
+            <i className={`fa-solid ${tab.icon}`}></i> {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* CONTENT AREA */}
+      <div className="min-h-[400px]">
+        {activeTab === "overview" && <OverviewTab />}
+        {activeTab === "schedule" && <ScheduleTab />}
+        {activeTab === "teams" && <TeamsTab />}
+        {activeTab === "admin" && isAdmin && <AdminTab />}
+      </div>
+
+      {/* IMAGE MODAL */}
+      {showImageModal && event?.imgURL && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={() => setShowImageModal(false)}
+        >
+          <div className="relative max-w-7xl w-full h-full flex items-center justify-center">
+            <img 
+              src={event.imgURL} 
+              alt={event.name} 
+              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            />
+            <button 
+              className="absolute top-4 right-4 bg-white/10 text-white w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20 transition-colors backdrop-blur-md border border-white/10"
+              onClick={(e) => { e.stopPropagation(); setShowImageModal(false); }}
+            >
+              <i className="fa-solid fa-xmark text-xl"></i>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

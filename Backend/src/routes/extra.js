@@ -14,7 +14,7 @@ router.post("/:eventId/edit-event",authenticate,async(req,res)=>{
 try {
     const {eventId}=req.params;
     const userid=req.user.id;
-    const {name,description,maxPlayer,status,rules,Sport,imgURL}=req.body;
+    const {name,description,maxPlayer,status,rules,Sport,imgURL,teamsBy}=req.body;
     const event=await Event.findById(eventId);
      if (!event) return res.status(404).json({ message: "Event not found" });
      const isAdmin = event.admin.map(id => normalize(id)).includes(userid);
@@ -44,6 +44,8 @@ try {
       event.status = status ?? event.status;
       event.Sport=Sport??event.Sport;
       event.imgURL=imgURL??event.imgURL;
+      event.teamsBy=teamsBy??event.teamsBy;
+      event.isScheduleLocked=false;
        if (rules) {
         event.rules = rules;
       }

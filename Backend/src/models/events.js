@@ -7,7 +7,7 @@ const eventSchema=new mongoose.Schema({
   managers:[{type:mongoose.Schema.Types.ObjectId,ref:"User",default:[]}],
 users:[{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true}],
   club:{type:mongoose.Schema.Types.ObjectId,ref:"Club",required:true},
-teamsBy:{type:String},
+teamsBy:{type:String,default:"users"},
 imgURL:{type:String},
 Sport:{type:String},
   rules:[{
