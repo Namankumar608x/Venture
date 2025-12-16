@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from "../utils/axiosInstance";
 import { useNavigate, useLocation } from "react-router-dom";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function Inbox() {
   const [notifications, setNotifications] = useState([]);
   const [showInbox, setShowInbox] = useState(false);

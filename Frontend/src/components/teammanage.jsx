@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../utils/axiosInstance";
 import axios from "axios";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function TeamManagePage() {
   const {clubid, eventId, teamid } = useParams();
   const navigate = useNavigate();
@@ -107,8 +107,8 @@ export default function TeamManagePage() {
 
   const leaveTeam = async () => {
     try {
-      await axios.post(
-        "http://localhost:5005/teams/leave",
+      await axiosInstance.post(
+        "/teams/leave",
         { teamid },
         { headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` } }
       );

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import {jwtDecode} from "jwt-decode";
-
+import axiosInstance from "../utils/axiosInstance";
 function Signup() {
   const [formData, setFormData] = useState({
     username: "",
@@ -18,7 +18,7 @@ function Signup() {
   // If user already has a valid token, go to home
   const joinclub=async()=>{
    try{
-             const res=await axios.post(`http://localhost:5005/clubs/join`, {
+             const res=await axiosInstance.post(`/clubs/join`, {
           clubid
         });
           }catch(err){
@@ -60,7 +60,7 @@ function Signup() {
     setIsLoading(true);
     setMessage("");
     try {
-      const res = await axios.post(`http://localhost:5005/auth/${clubid}/signup`, {
+      const res = await axiosInstance.post(`/auth/${clubid}/signup`, {
         username: formData.username,
         name: formData.fullName,
         email: formData.email,

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import api from "../utils/axiosInstance";
+import axiosInstance from "../utils/axiosInstance";
 
 export default function Profile() {
   const [user, setUser] = useState(null);

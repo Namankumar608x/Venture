@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
+import axiosInstance from "../utils/axiosInstance";
 
 export default function EditEventPage() {
   const { clubid, eventId } = useParams();
@@ -83,8 +84,8 @@ const removePoint = (ruleIndex, pointIndex) => {
       const config = getAuthConfig();
       if (!config) return;
 
-      const res = await axios.get(
-        `http://localhost:5005/events/${eventId}`,
+      const res = await axiosInstance.get(
+        `/events/${eventId}`,
         config
       );
 
@@ -129,8 +130,8 @@ const removePoint = (ruleIndex, pointIndex) => {
       const config = getAuthConfig();
       if (!config) return;
        console.log("edit event");
-      await axios.post(
-        `http://localhost:5005/extra/${eventId}/edit-event`,{
+      await axiosInstance.post(
+        `/extra/${eventId}/edit-event`,{
              ...form, rules
         },
        

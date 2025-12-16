@@ -3,10 +3,10 @@ import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 import { useParams } from "react-router-dom";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function AdminEventQueries() {
   const { clubid, eventId } = useParams();
-  const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:5005";
+  const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://";
 
   const [threads, setThreads] = useState({}); // { userId: { messages: [], user: {...}, unread: 0 } }
   const [participantsOrder, setParticipantsOrder] = useState([]); // ordered participant ids
@@ -55,7 +55,7 @@ export default function AdminEventQueries() {
     const loadAllQueries = async () => {
       try {
         log("GET", `${BACKEND}/events/${eventId}/queries`);
-        const res = await axios.get(`${BACKEND}/events/${eventId}/queries`, {
+        const res = await axiosInstance.get(`${BACKEND}/events/${eventId}/queries`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         log("GET queries response:", res?.data);
@@ -166,7 +166,7 @@ export default function AdminEventQueries() {
       // fallback to REST create (POST)
       try {
         log("Socket not connected - POST fallback", `${BACKEND}/events/${eventId}/queries`);
-        const res = await axios.post(
+        const res = await axiosInstance.post(
           `${BACKEND}/events/${eventId}/queries`,
           { message: replyText, targetUser: selectedUser },
           { headers: { Authorization: `Bearer ${token}` } }

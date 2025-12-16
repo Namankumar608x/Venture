@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import { io } from "socket.io-client";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function LiveMatchView() {
   const { eventId, matchId } = useParams();
 
@@ -19,7 +19,7 @@ export default function LiveMatchView() {
 
   /* ================= INITIAL FETCH ================= */
   const fetchMatch = async () => {
-    const res = await axios.get(
+    const res = await axiosInstance.get(
       `${BACKEND_URL}/events/matches/${matchId}`,
       auth()
     );

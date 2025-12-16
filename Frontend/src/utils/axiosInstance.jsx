@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const axiosInstance = axios.create({
-  baseURL: "http://localhost:5005",
+  baseURL: import.meta.env.VITE_API_URL,
 });
 
 /* ---------- REQUEST ---------- */
@@ -36,8 +36,8 @@ axiosInstance.interceptors.response.use(
       }
 
       try {
-        const res = await axios.post(
-          "http://localhost:5005/auth/refresh",
+        const res = await axiosInstance.post(
+          "/auth/refresh",
           { refreshToken }
         );
 

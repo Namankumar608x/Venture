@@ -1,5 +1,5 @@
 import React from "react";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function EventCard({ event, onOpen }) {
   return (
     <div 

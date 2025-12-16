@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 import { useParams, useNavigate } from "react-router-dom";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function EventQueries() {
   const { eventId } = useParams();
   const navigate = useNavigate();
-  const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:5005";
+  const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://";
 
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
@@ -30,7 +30,7 @@ export default function EventQueries() {
     // load history
     const loadHistory = async () => {
       try {
-        const res = await axios.get(
+        const res = await axiosInstance.get(
           `${BACKEND}/events/${eventId}/queries`,
           { headers: { Authorization: `Bearer ${token}` } }
         );

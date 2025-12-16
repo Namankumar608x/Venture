@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import EventCard from "./EventCard";
+import axiosInstance from "../utils/axiosInstance";
 
 function EventsDashboard() {
   const { clubid } = useParams();
@@ -20,7 +21,7 @@ function EventsDashboard() {
   const [isCreating, setIsCreating] = useState(false);
   const navigate = useNavigate();
   const [showShare, setShowShare] = useState(false);
-  const FRONTEND_URL = "localhost:5173";
+  const FRONTEND_URL = "https://venture-flax.vercel.app/";
   const link = `${FRONTEND_URL}/events/${clubid}/login`;
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
@@ -35,8 +36,8 @@ function EventsDashboard() {
       const config = getAuthConfig();
       if (!config) return;
 
-      await axios.post(
-        "http://localhost:5005/clubs/leave",
+      await axiosInstance.post(
+        "/clubs/leave",
         { clubid: clubId },
         config
       );
@@ -58,8 +59,8 @@ function EventsDashboard() {
       const config = getAuthConfig();
       if (!config) return;
 
-      await axios.delete(
-        "http://localhost:5005/clubs/delete",
+      await axiosInstance.delete(
+        "/clubs/delete",
         { clubid: clubId },
         config
       );
@@ -103,8 +104,8 @@ function EventsDashboard() {
       if (!config) return;
       // existing endpoints used in Home.jsx
       const [adminRes, partRes] = await Promise.all([
-        axios.get("http://localhost:5005/clubs/my-admin", config),
-        axios.get("http://localhost:5005/clubs/participant", config),
+        axiosInstance.get("/clubs/my-admin", config),
+        axiosInstance.get("/clubs/participant", config),
       ]);
       setMyAdminClubs(adminRes.data.tournaments || adminRes.data.clubs || []);
       setParticipantClubs(partRes.data.tournaments || partRes.data.clubs || []);
@@ -135,8 +136,8 @@ function EventsDashboard() {
     try {
       const config = getAuthConfig();
       if (!config) return;
-      const res = await axios.post(
-        "http://localhost:5005/events/new",
+      const res = await axiosInstance.post(
+        "/events/new",
         { clubid: selectedClub, ...event, status, teamc },
         config
       );
@@ -158,8 +159,8 @@ function EventsDashboard() {
       const config = getAuthConfig();
       if (!config) return [];
 
-      const res = await axios.get(
-        `http://localhost:5005/events/club/${selectedClub}`,
+      const res = await axiosInstance.get(
+        `/events/club/${selectedClub}`,
         config
       );
 

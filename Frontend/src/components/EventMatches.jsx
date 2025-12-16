@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function EventMatches() {
   const { clubid, eventId } = useParams();
   const navigate = useNavigate();
@@ -23,8 +23,8 @@ export default function EventMatches() {
   /* ================= FETCH EVENT ================= */
   useEffect(() => {
     const fetchEvent = async () => {
-      const res = await axios.get(
-        `http://localhost:5005/events/${eventId}`,
+      const res = await axiosInstance.get(
+        `/events/${eventId}`,
         auth()
       );
       setEvent(res.data.event);
@@ -35,8 +35,8 @@ export default function EventMatches() {
 
   /* ================= FETCH STAGES ================= */
   const fetchStages = async () => {
-    const res = await axios.get(
-      `http://localhost:5005/events/${eventId}/stages`,
+    const res = await axiosInstance.get(
+      `/events/${eventId}/stages`,
       auth()
     );
     setStages(res.data);
@@ -50,8 +50,8 @@ export default function EventMatches() {
   /* ================= GENERATE SCHEDULE ================= */
   const generateSchedule = async () => {
     setLoadingSchedule(true);
-    await axios.post(
-      `http://localhost:5005/events/${eventId}/schedule`,
+    await axiosInstance.post(
+      `/events/${eventId}/schedule`,
       {},
       auth()
     );

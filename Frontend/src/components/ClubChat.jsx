@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 import {jwtDecode} from "jwt-decode";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function ClubChat({ clubId, token: propToken }) {
   console.log("🔥 ClubChat mounted", { clubId, propToken });
 
@@ -85,7 +85,7 @@ export default function ClubChat({ clubId, token: propToken }) {
         // =====================
         // Fetch chat history
         // =====================
-        const chatRes = await axios.get(`http://localhost:5005/clubs/${clubId}/chat`);
+        const chatRes = await axiosInstance.get(`/clubs/${clubId}/chat`);
         console.log("📨 GET /clubs/:clubId/chat response:", chatRes.status, chatRes.data);
 
         if (!cancelled) {
@@ -95,7 +95,7 @@ export default function ClubChat({ clubId, token: propToken }) {
         // =====================
         // Fetch club info
         // =====================
-        const clubRes = await axios.get(`http://localhost:5005/clubs/${clubId}`);
+        const clubRes = await axiosInstance.get(`/clubs/${clubId}`);
         console.log("📨 GET /clubs/:clubId response:", clubRes.status, clubRes.data);
 
         const club = clubRes.data?.club ?? clubRes.data;
@@ -139,7 +139,7 @@ export default function ClubChat({ clubId, token: propToken }) {
     // =====================
     try {
       console.log("💬 Initializing socket connection...");
-      const s = io("http://localhost:5005", { auth: { token } });
+      const s = io("http://", { auth: { token } });
       socketRef.current = s;
 
       s.on("connect", () => {
@@ -213,7 +213,7 @@ export default function ClubChat({ clubId, token: propToken }) {
   } catch (sockErr) {
     // fallback: REST
     try {
-      const postRes = await axios.post(`http://localhost:5005/clubs/${clubId}/chat`, {
+      const postRes = await axiosInstance.post(`/clubs/${clubId}/chat`, {
         message: text.trim(),
       });
       const newMsg = postRes.data?.data;

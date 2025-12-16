@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function EventPage() {
   const { clubid, eventId } = useParams();
   const navigate = useNavigate();
@@ -57,10 +57,10 @@ export default function EventPage() {
       if (!config) return;
 
       const [evtRes, roleRes, schRes, teamRes] = await Promise.all([
-        axios.get(`http://localhost:5005/events/${eventId}`, config),
-        axios.get(`http://localhost:5005/events/roles/${eventId}`, config),
-        axios.get(`http://localhost:5005/events/${eventId}/schedules`, config),
-        axios.get(`http://localhost:5005/teams/${eventId}`, config)
+        axiosInstance.get(`/events/${eventId}`, config),
+        axiosInstance.get(`/events/roles/${eventId}`, config),
+        axiosInstance.get(`/events/${eventId}/schedules`, config),
+        axiosInstance.get(`/teams/${eventId}`, config)
       ]);
 
       setEvent(evtRes.data.event);
@@ -82,7 +82,7 @@ export default function EventPage() {
   useEffect(() => {
     const delay = setTimeout(() => {
       if (!searchQuery.trim()) { setSearchResults([]); return; }
-      axios.post("http://localhost:5005/auth/search-users", { q: searchQuery }, getAuthConfig())
+      axiosInstance.post("/auth/search-users", { q: searchQuery }, getAuthConfig())
         .then(res => setSearchResults(res.data))
         .catch(() => setSearchResults([]));
     }, 300);
@@ -92,7 +92,7 @@ export default function EventPage() {
   // --- Actions ---
   const postAction = async (url, body) => {
     try {
-      await axios.post(url, body, getAuthConfig());
+      await axiosInstance.post(url, body, getAuthConfig());
       fetchAllData();
       alert("Success!");
     } catch (err) {
@@ -255,7 +255,7 @@ export default function EventPage() {
       {isAdmin && (
         <div className="glass-panel p-5 rounded-2xl h-fit">
           <h3 className="font-bold text-white mb-4">Create Schedule</h3>
-          <form onSubmit={(e) => { e.preventDefault(); postAction(`http://localhost:5005/schedule/${eventId}/new-schedule`, scheduleForm); }} className="space-y-3">
+          <form onSubmit={(e) => { e.preventDefault(); postAction(`/schedule/${eventId}/new-schedule`, scheduleForm); }} className="space-y-3">
             <input className="input-field text-sm" placeholder="Title" onChange={e => setScheduleForm({ ...scheduleForm, title: e.target.value })} />
             <div className="grid grid-cols-2 gap-2">
               <input type="date" className="input-field text-sm" onChange={e => setScheduleForm({ ...scheduleForm, date: e.target.value })} />
@@ -293,7 +293,7 @@ export default function EventPage() {
               <p className="text-slate-400 text-sm">You are not in a team yet.</p>
               {/* Only show create if allowed */}
               {(isAdmin || event.teamsBy !== "admin") && event.status === "registration" && (
-                <form onSubmit={(e) => { e.preventDefault(); postAction("http://localhost:5005/teams/new-team", { teamname: teamForm.teamname, eventid: eventId }); }} className="flex gap-2 w-full md:w-auto">
+                <form onSubmit={(e) => { e.preventDefault(); postAction("/teams/new-team", { teamname: teamForm.teamname, eventid: eventId }); }} className="flex gap-2 w-full md:w-auto">
                   <input className="input-field text-sm py-2" placeholder="New Team Name" value={teamForm.teamname} onChange={e => setTeamForm({ teamname: e.target.value })} />
                   <button className="btn-primary py-2 text-sm whitespace-nowrap">Create Team</button>
                 </form>
@@ -350,7 +350,7 @@ export default function EventPage() {
               <option value="manager">Manager</option>
               <option value="admin">Admin</option>
             </select>
-            <button onClick={(e) => { e.preventDefault(); postAction("http://localhost:5005/events/promote", { ...promoteForm, eventid: eventId }); }} className="btn-primary">Promote</button>
+            <button onClick={(e) => { e.preventDefault(); postAction("/events/promote", { ...promoteForm, eventid: eventId }); }} className="btn-primary">Promote</button>
           </div>
         </div>
       </div>
@@ -359,7 +359,7 @@ export default function EventPage() {
       <div className="glass-panel p-6 rounded-2xl">
         <h3 className="font-bold text-white mb-4">Post Announcement</h3>
         <textarea className="input-field h-32 mb-4" placeholder="What's happening?" value={updateMsg} onChange={e => setUpdateMsg(e.target.value)} />
-        <button onClick={(e) => { e.preventDefault(); postAction("http://localhost:5005/events/updates", { eventid: eventId, message: updateMsg }); setUpdateMsg(""); }} className="btn-primary w-full">Post</button>
+        <button onClick={(e) => { e.preventDefault(); postAction("/events/updates", { eventid: eventId, message: updateMsg }); setUpdateMsg(""); }} className="btn-primary w-full">Post</button>
       </div>
 
       {/* Match Creation */}
@@ -378,7 +378,7 @@ export default function EventPage() {
             <option value="">Team B</option>
             {teams.filter(t => t.isRegistered).map(t => <option key={t._id} value={t._id}>{t.teamname}</option>)}
           </select>
-          <button onClick={(e) => { e.preventDefault(); postAction("http://localhost:5005/events/match/create", { ...matchForm, eventid: eventId }); }} className="btn-danger text-sm">Create Match</button>
+          <button onClick={(e) => { e.preventDefault(); postAction("/events/match/create", { ...matchForm, eventid: eventId }); }} className="btn-danger text-sm">Create Match</button>
         </div>
       </div>
     </div>

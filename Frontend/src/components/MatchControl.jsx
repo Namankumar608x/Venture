@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
 import { io } from "socket.io-client";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function MatchControl() {
   const { matchId } = useParams();
 
@@ -22,7 +22,7 @@ export default function MatchControl() {
 
   /* ================= FETCH MATCH ================= */
   const fetchMatch = async () => {
-    const res = await axios.get(
+    const res = await axiosInstance.get(
       `${BACKEND_URL}/events/matches/${matchId}`,
       auth()
     );
@@ -107,7 +107,7 @@ export default function MatchControl() {
 
   /* ================= ACTIONS ================= */
   const startMatch = async () => {
-    await axios.post(
+    await axiosInstance.post(
       `${BACKEND_URL}/events/matches/${matchId}/start`,
       {},
       auth()
@@ -118,7 +118,7 @@ export default function MatchControl() {
   const updateScore = async (team, val) => {
     if (match.status !== "live" || roundEnded) return;
 
-    await axios.put(
+    await axiosInstance.put(
       `${BACKEND_URL}/events/matches/${matchId}/round/score`,
       { team, points: val },
       auth()
@@ -154,7 +154,7 @@ export default function MatchControl() {
   const endRound = async () => {
     if (match.status !== "live" || roundEnded) return;
 
-    await axios.post(
+    await axiosInstance.post(
       `${BACKEND_URL}/events/matches/${matchId}/round/end`,
       {},
       auth()
@@ -163,7 +163,7 @@ export default function MatchControl() {
   };
 
   const endMatch = async () => {
-    await axios.post(
+    await axiosInstance.post(
       `${BACKEND_URL}/events/matches/${matchId}/end`,
       {},
       auth()

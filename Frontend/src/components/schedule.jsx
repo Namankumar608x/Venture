@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function SchedulePage() {
 const { clubid, eventId, scheduleid } = useParams();
 const scheduleId = scheduleid;
@@ -23,8 +23,8 @@ const scheduleId = scheduleid;
   const fetchScheduleInfo = async () => {
     try {
       const config = getAuthConfig();
-      const res = await axios.get(
-        `http://localhost:5005/schedule/${scheduleId}`,
+      const res = await axiosInstance.get(
+        `/schedule/${scheduleId}`,
         config
       );
 

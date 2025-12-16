@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from "react";
 import axios from "axios";
 import {useParams} from "react-router-dom";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function EventWinner(){
   const {eventId}=useParams();
   const [winner,setWinner]=useState(null);
@@ -11,8 +11,8 @@ export default function EventWinner(){
   });
 
   useEffect(()=>{
-  axios.get(
-    `http://localhost:5005/events/${eventId}/winner`,
+  axiosInstance.get(
+    `/events/${eventId}/winner`,
     auth()
   ).then(res=>{
     setWinner(res.data.winner);

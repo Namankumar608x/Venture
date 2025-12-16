@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {jwtDecode} from "jwt-decode";
 import { useParams } from "react-router-dom";
-
+import axiosInstance from "../utils/axiosInstance";
 function Login() {
    const {clubid}=useParams();
   const [formData, setFormData] = useState({
@@ -15,7 +15,7 @@ function Login() {
   const navigate = useNavigate();
 const joinclub=async()=>{
  try{
-           const res=await axios.post(`http://localhost:5005/clubs/join`, {
+           const res=await axiosInstance.post(`/clubs/join`, {
         clubid
       });
         }catch(err){
@@ -54,7 +54,7 @@ const joinclub=async()=>{
     e.preventDefault();
     setMessage("");
     try {
-      const res = await axios.post(`http://localhost:5005/auth/${clubid}/login`, {
+      const res = await axiosInstance.post(`/auth/${clubid}/login`, {
         email: formData.emailOrUsername,
         password: formData.password,
       });

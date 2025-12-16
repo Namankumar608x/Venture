@@ -2,7 +2,7 @@ import React,{useEffect,useState} from "react";
 import axios from "axios";
 import {useParams} from "react-router-dom";
 import {jwtDecode} from "jwt-decode";
-
+import axiosInstance from "../utils/axiosInstance";
 export default function EventBracket(){
   const {eventId}=useParams();
   const [stages,setStages]=useState([]);
@@ -13,8 +13,8 @@ export default function EventBracket(){
   };
 
   useEffect(()=>{
-    axios.get(
-  `http://localhost:5005/events/${eventId}/stages`,
+    axiosInstance.get(
+  `/events/${eventId}/stages`,
   auth()
 ).then(res=>setStages(res.data));
     
