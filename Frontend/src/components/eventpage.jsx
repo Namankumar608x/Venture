@@ -359,7 +359,8 @@ export default function EventPage() {
       <div className="glass-panel p-6 rounded-2xl">
         <h3 className="font-bold text-white mb-4">Post Announcement</h3>
         <textarea className="input-field h-32 mb-4" placeholder="What's happening?" value={updateMsg} onChange={e => setUpdateMsg(e.target.value)} />
-        <button onClick={(e) => { e.preventDefault(); postAction("/events/updates", { eventid: eventId, message: updateMsg }); setUpdateMsg(""); }} className="btn-primary w-full">Post</button>
+        <button type="button"
+ onClick={(e) => { e.preventDefault(); postAction("/events/updates", { eventid: eventId, message: updateMsg }); setUpdateMsg(""); }} className="btn-primary w-full">Post</button>
       </div>
 
       {/* Match Creation */}
