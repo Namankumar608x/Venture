@@ -3,7 +3,7 @@ import express from "express";
 import Club from "../models/club.js";
 import User from "../models/user.js";
 import auth from "../middlewares/auth.js";
-import ChatMessage from "../models/ChatMessage.js";
+import ChatMessage from "../models/chatMessage.js";
 import Team from "../models/team.js";
 import Schedule from "../models/schedule.js";
 import Match from "../models/matches.js";
