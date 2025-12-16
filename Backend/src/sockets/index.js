@@ -5,7 +5,7 @@ dotenv.config();
 
 import Event from "../models/events.js";
 import Club from "../models/club.js";
-import ChatMessage from "../models/ChatMessage.js";
+import ChatMessage from "../models/chatMessage.js";
 import User from "../models/user.js";
 import QueryMessage from "../models/QueryMessage.js"; // NEW: model for private queries
 
