@@ -208,12 +208,12 @@ const countFemale = team.members.filter(
       <h2 className="mt-4 font-semibold">
         Members ({team.members.length}/{maxlength})
       </h2>
-      {event.genderres && (event.genderres==="Male" || event.genderres==="Female" ) &&(
+      {event?.genderres && (event.genderres==="Male" || event.genderres==="Female" ) &&(
         <h2 className="mt-4 font-semibold text-red-800">
        ONLY {event.genderres} teammates allowed
       </h2>
       ) }
-      {event.genderres && (event.genderres==="Mixed" ) &&(
+      {event?.genderres && (event.genderres==="Mixed" ) &&(
         <>
         <h2 className="mt-4 font-semibold text-red-800">
        Max Male member allowed- {event.maxmale} 
