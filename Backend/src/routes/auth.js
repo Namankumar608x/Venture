@@ -125,8 +125,13 @@ router.post("/:clubid/login", async (req, res) => {
     if (!exist.clubs.includes(clubid))
       exist.clubs.push(clubid);
 
-    if (!club.users.some(id => id.toString() === exist._id.toString()))
-      club.users.push(exist._id);
+    if (!club.users.some(id => id.toString() === exist._id.toString())){
+  club.users.push(exist._id);
+    }
+    else{
+      return res.status(401).json({message:"User already iin club"});
+    }
+      
 
     await club.save();
     await exist.save();
