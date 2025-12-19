@@ -29,13 +29,13 @@ function generateRefreshToken(user) {
 ----------------------------------------------------------- */
 router.post("/signup", async (req, res) => {
   try {
-    const { username, name, email, password } = req.body;
+    const { username, name, email, password,roll_number,gender } = req.body;
 
     if (await User.findOne({ email }) || await User.findOne({ username }))
       return res.status(400).json({ message: "User already exists!" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ username, name, email, password: hashedPassword });
+    const user = new User({ username, name, email, password: hashedPassword,roll_number,gender });
 
     const saved = await user.save();
 
@@ -161,13 +161,13 @@ router.post("/:clubid/login", async (req, res) => {
 router.post("/:clubid/signup", async (req, res) => {
   try {
     const { clubid } = req.params;
-    const { username, name, email, password } = req.body;
+    const { username, name, email, password,roll_number,gender } = req.body;
 
     if (await User.findOne({ email }) || await User.findOne({ username }))
       return res.status(400).json({ message: "User already exists!" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ username, name, email, password: hashedPassword });
+    const user = new User({ username, name, email, password: hashedPassword,roll_number,gender });
 
     const saved = await user.save();
 
@@ -178,7 +178,7 @@ router.post("/:clubid/signup", async (req, res) => {
     saved.clubs.push(clubid);
     club.users.push(saved._id);
 
-    await saved.save();
+    
     await club.save();
 
     const accessToken = generateAccessToken(saved);

@@ -23,7 +23,7 @@ export default function MatchControl() {
   /* ================= FETCH MATCH ================= */
   const fetchMatch = async () => {
     const res = await axiosInstance.get(
-      `${BACKEND_URL}/events/matches/${matchId}`,
+      `/events/matches/${matchId}`,
       auth()
     );
 
@@ -164,7 +164,7 @@ export default function MatchControl() {
 
   const endMatch = async () => {
     await axiosInstance.post(
-      `${BACKEND_URL}/events/matches/${matchId}/end`,
+      `/events/matches/${matchId}/end`,
       {},
       auth()
     );

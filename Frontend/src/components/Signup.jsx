@@ -8,7 +8,10 @@ function Signup() {
   const [formData, setFormData] = useState({
     username: "",
     fullName: "",
+       roll_number:"",
+    gender:"",
     email: "",
+
     password: "",
   });
   const [message, setMessage] = useState("");
@@ -42,7 +45,7 @@ function Signup() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.username || !formData.fullName || !formData.email || !formData.password) {
+    if (!formData.username || !formData.fullName || !formData.email || !formData.password || !formData.roll_number || !formData.gender) {
       setMessage("Please fill all the fields");
       return;
     }
@@ -53,6 +56,8 @@ function Signup() {
       const res = await axiosInstance.post("/auth/signup", {
         username: formData.username,
         name: formData.fullName,
+        roll_number:formData.roll_number,
+        gender:formData.gender,
         email: formData.email,
         password: formData.password,
       });
@@ -105,6 +110,21 @@ function Signup() {
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Full Name</label>
               <input type="text" name="fullName" value={formData.fullName} onChange={handleChange} className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg" placeholder="Enter your full name" />
+            </div>
+
+             <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Roll Number</label>
+              <input type="text" name="roll_number" value={formData.roll_number} onChange={handleChange} className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg" placeholder="Enter your roll number" />
+            </div>
+
+          <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Gender</label>
+              <select name="gender" value={formData.gender} onChange={handleChange} className="w-full px-4 py-3 bg-slate-800/50 border border-slate-800 rounded-lg text-white outline-none">
+                <option value="" disabled>Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                
+              </select>
             </div>
 
             <div>

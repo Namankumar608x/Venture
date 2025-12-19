@@ -9,6 +9,8 @@ function Signup() {
     username: "",
     fullName: "",
     email: "",
+    roll_number:"",
+    gender:"",
     password: "",
   });
   const [message, setMessage] = useState("");
@@ -64,6 +66,8 @@ function Signup() {
         username: formData.username,
         name: formData.fullName,
         email: formData.email,
+         roll_number:formData.roll_number,
+        gender:formData.gender,
         password: formData.password,
       });
 
@@ -115,6 +119,18 @@ function Signup() {
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Full Name</label>
               <input type="text" name="fullName" value={formData.fullName} onChange={handleChange} className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg" placeholder="Enter your full name" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Roll Number</label>
+              <input type="text" name="Roll_Number" value={formData.roll_number} onChange={handleChange} className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg" placeholder="Enter your full name" />
+            </div>
+
+             <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Gender</label>
+              <select type="text" name="gender" value={formData.gender} onChange={handleChange} className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg" placeholder="Enter your full name" >
+              <option key="Male">Male</option>
+              <option key="Female">Female</option>
+              </select>
             </div>
 
             <div>

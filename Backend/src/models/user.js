@@ -8,6 +8,8 @@ const userSchema=new mongoose.Schema({
   events:[{type:mongoose.Schema.Types.ObjectId,ref:"Event",default:[]}],
   clubs:[{type:mongoose.Schema.Types.ObjectId,ref:"Club",default:[]}],
   currentRefreshToken:{type:String,default:null},
+  roll_number:{type:String},
+  gender:{type:String},
   notifications: [
   {
     message: String,
