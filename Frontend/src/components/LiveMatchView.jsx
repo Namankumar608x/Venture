@@ -6,30 +6,40 @@ import axiosInstance from "../utils/axiosInstance";
 export default function LiveMatchView() {
   const { matchId } = useParams();
 
-  const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:5005`;
+  const BACKEND_URL = `localhost:5005`;
 
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const socketRef = useRef(null);
 
   /* ================= FETCH MATCH ================= */
+  
   useEffect(() => {
-    const fetchMatch = async () => {
-      try {
-        console.log("📥 [VIEWER] fetching match:", matchId);
-        const res = await axiosInstance.get(
-          `/events/matches/${matchId}`
-        );
-        setMatch(res.data);
-      } catch (err) {
-        console.error("❌ [VIEWER] fetch failed:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  let intervalId;
 
-    fetchMatch();
-  }, [matchId]);
+  const fetchMatch = async () => {
+    try {
+      console.log("📥 [VIEWER] fetching match:", matchId);
+      const res = await axiosInstance.get(`/events/matches/${matchId}`);
+      setMatch(res.data);
+    } catch (err) {
+      console.error("❌ [VIEWER] fetch failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // initial fetch
+  fetchMatch();
+
+  // 🔁 poll every 5 seconds
+  intervalId = setInterval(fetchMatch, 4500);
+
+  // cleanup
+  return () => {
+    clearInterval(intervalId);
+  };
+}, [matchId]);
 
   /* ================= SOCKET ================= */
   useEffect(() => {
