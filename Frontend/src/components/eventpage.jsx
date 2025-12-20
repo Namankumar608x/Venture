@@ -96,6 +96,12 @@ const OverviewTab = ({ event, role, admins, managers, clubid, eventId, setShowIm
           <div className="flex flex-col gap-2">
             <Link to={`/events/${clubid}/${eventId}/bracket`} className="btn-secondary text-sm text-center">Bracket</Link>
             <Link to={`/events/${clubid}/${eventId}/matches`} className="btn-secondary text-sm text-center">Matches</Link>
+            <Link 
+              to={role === "participant" ? `/events/${clubid}/${eventId}/query` : `/events/${clubid}/${eventId}/queries/admin`} 
+              className="btn-secondary text-sm text-center"
+            >
+              {role === "participant" ? "Raise a Query" : "Manage Queries"}
+            </Link>
           </div>
         </div>
       </div>
