@@ -122,12 +122,12 @@ function Signup() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Roll Number</label>
-              <input type="text" name="Roll_Number" value={formData.roll_number} onChange={handleChange} className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg" placeholder="Enter your full name" />
+              <input type="text" name="roll_number" value={formData.roll_number} onChange={handleChange} className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg" placeholder="Enter your roll number" />
             </div>
 
              <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Gender</label>
-              <select type="text" name="gender" value={formData.gender} onChange={handleChange} className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg" placeholder="Enter your full name" >
+              <select type="text" name="gender" value={formData.gender} onChange={handleChange} className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg" placeholder="Enter your gender" >
               <option key="Male">Male</option>
               <option key="Female">Female</option>
               </select>

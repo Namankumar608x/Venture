@@ -18,7 +18,10 @@ export default function EditEventPage() {
     status: "registration",
     imgURL:"",
     Sport:"",
-    teamsBy:""
+    teamsBy:"",
+    genderres:"None",
+    maxmale:0,
+    maxfemale:0
   });
   const [rules,setRules]=useState([{
     title:"",
@@ -99,7 +102,10 @@ const removePoint = (ruleIndex, pointIndex) => {
         status: e.status || "registration",
         imgURL:e.imgURL || "",
         Sport:e.Sport || "",
-        teamsBy:e.teamsBy || "users"
+        teamsBy:e.teamsBy || "users",
+         genderres: e.genderres || "None",
+  maxmale: e.maxmale || 0,
+  maxfemale: e.maxfemale || 0,
       });
         setRules(
       Array.isArray(e.rules) && e.rules.length > 0
@@ -348,6 +354,64 @@ const removePoint = (ruleIndex, pointIndex) => {
               }
             />
           </div>
+          <div>
+  <label className="text-sm text-slate-400">
+    Gender Restriction
+  </label>
+
+  <select
+    className={input}
+    value={form.genderres}
+    onChange={(e) =>
+      setForm({ ...form, genderres: e.target.value })
+    }
+  >
+    <option value="None">None</option>
+    <option value="Male">Male</option>
+    <option value="Female">Female</option>
+    <option value="Mixed">Mixed</option>
+  </select>
+</div>
+{form.genderres === "Mixed" && (
+  <div className="grid grid-cols-2 gap-4">
+    <div>
+      <label className="text-sm text-slate-400">
+        Max Male Players
+      </label>
+      <input
+        type="number"
+        min="0"
+        className={input}
+        value={form.maxmale}
+        onChange={(e) =>
+          setForm({
+            ...form,
+            maxmale: Number(e.target.value),
+          })
+        }
+      />
+    </div>
+
+    <div>
+      <label className="text-sm text-slate-400">
+        Max Female Players
+      </label>
+      <input
+        type="number"
+        min="0"
+        className={input}
+        value={form.maxfemale}
+        onChange={(e) =>
+          setForm({
+            ...form,
+            maxfemale: Number(e.target.value),
+          })
+        }
+      />
+    </div>
+  </div>
+)}
+
 
           {/* REGISTRATION */}
           <div className="flex items-center gap-3">

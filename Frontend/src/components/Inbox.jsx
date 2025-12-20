@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
 import api from "../utils/axiosInstance";
 import { useNavigate, useLocation } from "react-router-dom";
-import axiosInstance from "../utils/axiosInstance";
+import { Menu, X, Search, Heart, User, Pointer } from 'lucide-react';
+import { Moon, Sun } from "lucide-react";
+import {useTheme } from "../utils/theme.jsx";
 export default function Inbox() {
   const [notifications, setNotifications] = useState([]);
   const [showInbox, setShowInbox] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const {theme,toggleTheme}=useTheme();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -72,6 +75,12 @@ export default function Inbox() {
         <div className="flex items-center gap-6">
           {/* Notifications Bell */}
           <div className="relative">
+             {/* <button
+                onClick={toggleTheme}
+                className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 transition-colors"
+              >
+                {theme === "light" ? <Moon size={20} /> : <Sun className='text-white 'size={20} />}
+              </button> */}
             <button
               onClick={(e) => {
                 e.stopPropagation();

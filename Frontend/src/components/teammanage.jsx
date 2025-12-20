@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../utils/axiosInstance";
 import axios from "axios";
-import axiosInstance from "../utils/axiosInstance";
+
 export default function TeamManagePage() {
   const {clubid, eventId, teamid } = useParams();
   const navigate = useNavigate();
@@ -14,12 +14,17 @@ export default function TeamManagePage() {
   const [editingName, setEditingName] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
   const [currentUser, setCurrentUser] = useState("");
+  const [event,setevent]=useState();
+
+  let countmale=0;
+  let countfemale=0;
 
   /* -----------------------------------------------------------
         FETCH EVENT
   ------------------------------------------------------------ */
   const fetchEvent = async () => {
     const res = await api.get(`/events/${eventId}`);
+    setevent(res.data.event);
     setMaxlength(res.data.event.maxPlayer);
     console.log(maxlength);
   };
@@ -47,6 +52,7 @@ export default function TeamManagePage() {
   useEffect(() => {
     fetchEvent();
     fetchTeam();
+    
   }, []);
 
   /* -----------------------------------------------------------
@@ -106,17 +112,15 @@ export default function TeamManagePage() {
   };
 
   const leaveTeam = async () => {
-    try {
-      await axiosInstance.post(
-        "/teams/leave",
-        { teamid },
-        { headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` } }
-      );
-      navigate(`/events/${eventId}`);
-    } catch (err) {
-      alert(err.response?.data?.message);
-    }
-  };
+  try {
+    await api.post("/teams/leave", { teamid });
+    navigate(`/events/${clubid}/${eventId}`);
+  } catch (err) {
+    alert(err.response?.data?.message);
+  }
+};
+
+
   if(!team) return null;
 const isMember = team.members.some(
   (m) => m._id.toString() === currentUser
@@ -139,7 +143,23 @@ const isMember = team.members.some(
     
    
   };
+  const maxMaleAllowed =
+  event?.genderres === "Mixed"
+    ? event?.maxmale
+    : maxlength;
 
+const maxFemaleAllowed =
+  event?.genderres === "Mixed"
+    ? event?.maxfemale
+    : maxlength;
+
+const countMale = team.members.filter(
+  (m) => m.gender === "Male"
+).length;
+
+const countFemale = team.members.filter(
+  (m) => m.gender === "Female"
+).length;
   if (!team) return null;
 
   const leaderId =
@@ -188,6 +208,22 @@ const isMember = team.members.some(
       <h2 className="mt-4 font-semibold">
         Members ({team.members.length}/{maxlength})
       </h2>
+      {event?.genderres && (event.genderres==="Male" || event.genderres==="Female" ) &&(
+        <h2 className="mt-4 font-semibold text-red-800">
+       ONLY {event.genderres} teammates allowed
+      </h2>
+      ) }
+      {event?.genderres && (event.genderres==="Mixed" ) &&(
+        <>
+        <h2 className="mt-4 font-semibold text-red-800">
+       Max Male member allowed- {event.maxmale} 
+      </h2>
+      <h2 className="mt-4 font-semibold text-red-800">
+       Max Female member allowed- {event.maxfemale} 
+      </h2>
+      </>
+      ) }
+
 
       {team.members.map((m) => {
         const memberId = m._id.toString();
@@ -199,6 +235,7 @@ const isMember = team.members.some(
             className="bg-slate-800 p-2 rounded flex justify-between mt-2"
           >
             <span>{m.username || m.name}</span>
+            
 
             {!isRegistered && isLeader && !memberIsLeader && (
               <div className="flex gap-2">
@@ -216,18 +253,31 @@ const isMember = team.members.some(
                 </button>
               </div>
             )}
-
+             <div className="flex gap-4">
+                {m.gender==="Male"?(
+       <span className="text-xs bg-red-600 px-2 rounded">
+      M
+            </span>
+                ):(
+                   <span className="text-xs bg-blue-600 px-2 rounded">
+      F
+            </span>
+                )}
+              
+          
             {memberIsLeader && (
               <span className="text-xs bg-red-600 px-2 rounded">
                 Leader
               </span>
             )}
+              </div>
           </div>
         );
       })}
 
       {/* INVITE USERS */}
-      {!isRegistered && isLeader && team.members.length < maxlength && (
+      {countMale < maxMaleAllowed &&
+ countFemale < maxFemaleAllowed && !isRegistered && isLeader && team.members.length < maxlength && (
         <>
           <h3 className="mt-6 font-semibold">Invite Players</h3>
           <input

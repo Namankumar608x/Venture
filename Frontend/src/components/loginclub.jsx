@@ -129,9 +129,9 @@ console.log("Token variable:", token);
 
         <p className="text-sm text-center mt-6 text-gray-400">
           Don't have an account?{" "}
-          <Link to="/signup" className="text-indigo-400 font-semibold hover:underline">
+          <div onClick={()=>navigate(`/events/${clubid}/signup`)} className="text-indigo-400 font-semibold hover:underline">
             Create one
-          </Link>
+          </div>
         </p>
       </div>
     </div>

@@ -40,9 +40,9 @@ router.get("/team/:teamid/",async(req,res)=>{
   try {
     const {teamid}=req.params;
     
-    const teams=await Team.findById(teamid).populate("leader", "name username email")
-      .populate("members", "name username email")
-      .populate("requests.user", "name username email");
+    const teams=await Team.findById(teamid).populate("leader", "name username email gender")
+      .populate("members", "name username email gender")
+      .populate("requests.user", "name username email gender");
        
       return res.status(200).json(teams);
   } catch (error) {
@@ -76,10 +76,13 @@ router.post("/new-team", authenticate, async (req, res) => {
   try {
     const adminid = req.user.id;
     const { teamname, eventid } = req.body;
-
+     const admin=await User.findById(adminid);
     const event = await checkEvent(eventid);
     if (!event) return res.status(404).json({ message: "Event not found" });
-
+const genderres=event?.genderes;
+if(genderres==="Male" || genderres==="Female"){
+if(admin.gender!==genderres) return res.status(401).json({message:`Only ${genderres} are allowed in this event`})
+}
     const existingTeam = await Team.findOne({
       eventid,
       $or: [{ leader: adminid }],
@@ -117,10 +120,17 @@ router.post("/invite", authenticate, async (req, res) => {
   try {
     const { teamid, userid } = req.body;
     const adminid = req.user.id;
-
+    
 
     const team = await Team.findById(teamid);
     if (!team) return res.status(404).json({ message: "Team not found" });
+   const user=await User.findById(userid);
+   const eventid=team.eventid;
+   const event=await Event.findById(eventid);
+   const genderr=event?.genderres;
+   if(genderr==="Male" || genderr==="Female"){
+    if(user.gender.toString()!==genderr.toString) return res.status(401).json({message:`Only ${genderr} are allowed in this event`})
+   }
 
     if (team.leader.toString() !== adminid)
       return res.status(403).json({ message: "Only leader can invite" });
@@ -143,7 +153,6 @@ router.post("/invite", authenticate, async (req, res) => {
     team.requests.push({ user: userid });
     await team.save();
 
-    const user = await User.findById(userid);
 
     user.notifications.push({
       message: `You were invited to join team "${team.teamname}"`,

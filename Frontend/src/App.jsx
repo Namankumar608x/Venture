@@ -21,6 +21,7 @@ import MatchControl from "./components/MatchControl";
 import EventWinner from "./components/EventWinner";
 import LiveMatchView from "./components/LiveMatchView.jsx";
 
+import { ThemeProvider } from "./utils/theme.jsx";
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("accessToken");
@@ -40,6 +41,7 @@ export default function App() {
 
   return (
     <>
+     <ThemeProvider>
      <Routes>
 
   {/* PUBLIC */}
@@ -142,8 +144,10 @@ export default function App() {
 
 
   <Route path="*" element={<Login />} />
-  
+
 </Routes>
+  </ThemeProvider>
+  
 
     </>
   );
