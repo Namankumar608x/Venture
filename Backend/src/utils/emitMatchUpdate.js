@@ -1,16 +1,17 @@
 export function emitMatchEvent(io, eventId, type, payload) {
-  console.log(
-    "[MATCH SOCKET EMIT]",
-    type,
-    "→ event:",
-    `event:${eventId}`,
-    "→ organizers:",
-    `event-organizers:${eventId}`
-  );
+  if (!io) {
+    console.warn("[MATCH SOCKET EMIT] io missing");
+    return;
+  }
 
-  // Audience / participants
+  console.log("=====================================");
+  console.log("[MATCH SOCKET EMIT]");
+  console.log("Type:", type);
+  console.log("Event ID:", eventId);
+  console.log("Payload:", payload);
+  console.log("Target room:", `event:${eventId}`);
+  console.log("=====================================");
+
+  // 🔥 ALWAYS emit live events to event room
   io.to(`event:${eventId}`).emit(type, payload);
-
-  // Admins / managers
-  io.to(`event-organizers:${eventId}`).emit(type, payload);
 }

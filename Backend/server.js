@@ -22,20 +22,22 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 5005;
 
+/* ================= CORS ================= */
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
+
       if (
         origin.includes("localhost") ||
         origin.includes("127.0.0.1") ||
         origin.includes("192.168.") ||
-        origin.includes("https://venture-flax.vercel.app") 
+        origin.includes("venture-flax.vercel.app")
       ) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
+        return callback(null, true);
       }
+
+      return callback(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -43,8 +45,36 @@ app.use(
   })
 );
 
+/* ================= DB ================= */
 mongo();
 
+/* ================= HTTP + SOCKET ================= */
+const httpServer = http.createServer(app);
+
+const io = new IOServer(httpServer, {
+  cors: {
+    origin: [/localhost/, /127\.0\.0\.1/, /192\.168\./, "https://venture-flax.vercel.app"],
+    credentials: true,
+  },
+});
+
+console.log("⚙️ Socket.IO initialized");
+
+/* ================= 🔥 CRITICAL MIDDLEWARE ================= */
+/* MUST BE BEFORE ROUTES */
+app.locals.io = io;
+
+app.use((req, res, next) => {
+  if (!req.app.locals.io) {
+    console.warn("[IO MIDDLEWARE] io NOT FOUND");
+  } else {
+    console.log("[IO MIDDLEWARE] io attached to request");
+  }
+  req.io = req.app.locals.io;
+  next();
+});
+
+/* ================= ROUTES ================= */
 app.use("/extra", extra);
 app.use("/auth", auth);
 app.use("/clubs", club);
@@ -52,30 +82,15 @@ app.use("/events", event);
 app.use("/teams", teams);
 app.use("/schedule", schedule);
 app.use("/notifications", notifications);
+
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK" });
 });
-// 🔥 IMPORTANT: create http server from express
-const httpServer = http.createServer(app);
 
-// 🔥 Attach socket.io to SAME http server
-const io = new IOServer(httpServer, {
-  cors: {
-    origin: [/localhost/, /127\.0\.0\.1/, /192\.168\./,"https://venture-flax.vercel.app"],
-    credentials: true,
-  },
-});
-
-// expose io
-app.locals.io = io;
-app.use((req, res, next) => {
-  req.io = io;
-  next();
-});
-
+/* ================= SOCKET HANDLERS ================= */
 setupSocket(io);
 
-// 🔥 CRITICAL FIX HERE
+/* ================= SERVER START ================= */
 httpServer.listen(PORT, "0.0.0.0", () => {
-  console.log("Server running on:", PORT);
+  console.log("🚀 Server running on:", PORT);
 });

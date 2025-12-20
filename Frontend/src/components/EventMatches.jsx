@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
+
 export default function EventMatches() {
   const { clubid, eventId } = useParams();
   const navigate = useNavigate();
@@ -52,7 +52,7 @@ export default function EventMatches() {
     setLoadingSchedule(true);
     await axiosInstance.post(
       `/events/${eventId}/schedule`,
-      {},
+      { type: "KNOCKOUT" },
       auth()
     );
     await fetchStages();
@@ -113,39 +113,29 @@ export default function EventMatches() {
                 match.teamB?.teamId?.teamname || "TBD";
 
               return (
-                // ONLY relevant part changed (safe)
+                <div
+                  key={match._id}
+                  onClick={() => {
+                    navigate(
+                      isAdmin
+                        ? `/events/${clubid}/${eventId}/matches/${match._id}`
+                        : `/events/${clubid}/${eventId}/matches/${match._id}/live`
+                    );
+                  }}
+                  className="flex justify-between items-center p-4 rounded-xl border border-slate-700 bg-slate-800 cursor-pointer hover:bg-slate-700"
+                >
+                  <p className="font-medium">
+                    {teamA} vs {teamB}
+                  </p>
 
-<div
-  key={match._id}
-  onClick={() => {
-    if (isAdmin) {
-      navigate(
-        `/events/${clubid}/${eventId}/matches/${match._id}`
-      );
-    } else {
-      navigate(
-        `/events/${clubid}/${eventId}/matches/${match._id}/live`
-      );
-    }
-  }}
-  className={`flex justify-between items-center p-4 rounded-xl border border-slate-700 bg-slate-800
-    cursor-pointer hover:bg-slate-700`}
->
-  <div>
-    <p className="font-medium">
-      {teamA} vs {teamB}
-    </p>
-  </div>
-
-  <span
-    className={`text-xs px-3 py-1 rounded-full ${statusColor(
-      match.status
-    )}`}
-  >
-    {match.status}
-  </span>
-</div>
-
+                  <span
+                    className={`text-xs px-3 py-1 rounded-full ${statusColor(
+                      match.status
+                    )}`}
+                  >
+                    {match.status}
+                  </span>
+                </div>
               );
             })}
           </div>

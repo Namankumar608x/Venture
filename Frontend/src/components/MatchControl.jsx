@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
-import axios from "axios";
 import { useParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import axiosInstance from "../utils/axiosInstance";
+
 export default function MatchControl() {
   const { matchId } = useParams();
 
@@ -11,7 +11,6 @@ export default function MatchControl() {
   const [scoreB, setScoreB] = useState(0);
 
   const socketRef = useRef(null);
-
   const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:5005`;
 
   const auth = () => ({
@@ -30,13 +29,11 @@ export default function MatchControl() {
     const data = res.data;
     setMatch(data);
 
-    const activeRound = data.rounds.find(
-      r => r.roundNo === data.currentRound && !r.isCompleted
-    );
+    const active = data.rounds.find(r => !r.isCompleted);
 
-    if (activeRound) {
-      setScoreA(activeRound.teamA_score);
-      setScoreB(activeRound.teamB_score);
+    if (active) {
+      setScoreA(active.teamA_score);
+      setScoreB(active.teamB_score);
     } else {
       setScoreA(0);
       setScoreB(0);
@@ -47,12 +44,10 @@ export default function MatchControl() {
     fetchMatch();
   }, [matchId]);
 
-  /* ================= SOCKET (FIXED) ================= */
+  /* ================= SOCKET ================= */
   useEffect(() => {
     if (!match?.eventid) return;
-    if (socketRef.current) return; // 🔥 PREVENT MULTIPLE SOCKETS
-
-    console.log("🟡 [ADMIN] creating socket");
+    if (socketRef.current) return;
 
     const socket = io(BACKEND_URL, {
       auth: {
@@ -63,52 +58,51 @@ export default function MatchControl() {
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      console.log("🟢 [ADMIN] socket connected:", socket.id);
-      console.log("🟡 [ADMIN] emitting join:event:", match.eventid.toString());
-
       socket.emit("join:event", {
         eventId: match.eventid.toString(),
       });
     });
 
-    socket.on("match:round:update", (data) => {
+    socket.on("match:round:update", data => {
       if (data.matchId === matchId) {
         setScoreA(data.teamA_score);
         setScoreB(data.teamB_score);
+
+        // 🔥 sync full match state (important)
+        fetchMatch();
       }
     });
 
-    socket.on("match:round:ended", (data) => {
+    socket.on("match:round:ended", data => {
       if (data.matchId === matchId) fetchMatch();
     });
 
-    socket.on("match:ended", (data) => {
+    socket.on("match:ended", data => {
       if (data.matchId === matchId) fetchMatch();
-    });
-
-    socket.on("connect_error", (err) => {
-      console.error("❌ [ADMIN] socket connect_error:", err.message);
     });
 
     return () => {
-      console.log("🔴 [ADMIN] socket disconnected");
       socket.disconnect();
       socketRef.current = null;
     };
   }, [match?.eventid, matchId]);
 
   /* ================= DERIVED STATE ================= */
-  const currentRound = useMemo(() => {
+  const activeRound = useMemo(() => {
     if (!match) return null;
-    return match.rounds.find(r => r.roundNo === match.currentRound);
+    return match.rounds.find(r => !r.isCompleted);
   }, [match]);
 
-  const roundEnded = currentRound?.isCompleted === true;
+  const displayRoundNo = activeRound
+    ? activeRound.roundNo
+    : match
+    ? match.rounds.length + 1
+    : 1;
 
   /* ================= ACTIONS ================= */
   const startMatch = async () => {
     await axiosInstance.post(
-      `${BACKEND_URL}/events/matches/${matchId}/start`,
+      `/events/matches/${matchId}/start`,
       {},
       auth()
     );
@@ -116,13 +110,16 @@ export default function MatchControl() {
   };
 
   const updateScore = async (team, val) => {
-    if (match.status !== "live" || roundEnded) return;
+    if (match.status !== "live") return;
 
     await axiosInstance.put(
-      `${BACKEND_URL}/events/matches/${matchId}/round/score`,
+      `/events/matches/${matchId}/round/score`,
       { team, points: val },
       auth()
     );
+
+    // ensure UI never lags
+    fetchMatch();
   };
 
   const incA = () => {
@@ -152,24 +149,29 @@ export default function MatchControl() {
   };
 
   const endRound = async () => {
-    if (match.status !== "live" || roundEnded) return;
+    if (match.status !== "live") return;
 
     await axiosInstance.post(
-      `${BACKEND_URL}/events/matches/${matchId}/round/end`,
+      `/events/matches/${matchId}/round/end`,
       {},
       auth()
     );
+
     fetchMatch();
   };
 
   const endMatch = async () => {
-    await axiosInstance.post(
-      `/events/matches/${matchId}/end`,
-      {},
-      auth()
-    );
-    fetchMatch();
-  };
+  if (match.status !== "live") return;
+
+  await axiosInstance.post(
+    `/events/matches/${matchId}/end`,
+    {},
+    auth()
+  );
+
+  fetchMatch();
+};
+
 
   if (!match) return null;
 
@@ -184,7 +186,7 @@ export default function MatchControl() {
         </p>
 
         <p className="text-sm text-slate-400 mb-4">
-          Status: {match.status} | Round {match.currentRound}
+          Status: {match.status} | Round {displayRoundNo}
         </p>
 
         {match.status === "upcoming" && (
@@ -217,7 +219,10 @@ export default function MatchControl() {
         <div className="flex gap-3 mb-6">
           <button
             onClick={endRound}
-            disabled={match.status !== "live" || roundEnded}
+            disabled={
+              match.status !== "live" ||
+              (scoreA === 0 && scoreB === 0)
+            }
             className="px-4 py-2 bg-indigo-600 rounded disabled:opacity-50"
           >
             End Round
@@ -236,7 +241,7 @@ export default function MatchControl() {
         <div>
           <h3 className="mb-2">Rounds</h3>
           {match.rounds.map(r => (
-            <div key={r.roundNo}>
+            <div key={r._id}>
               Round {r.roundNo}: {r.teamA_score} : {r.teamB_score}
             </div>
           ))}

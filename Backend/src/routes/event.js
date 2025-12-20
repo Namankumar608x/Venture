@@ -10,6 +10,8 @@ import Schedule from "../models/schedule.js";
 import {checkadmin,checkmanager} from "../middlewares/roles.js";
 import QueryMessage from "../models/QueryMessage.js";
 import Stage from "../models/stages.js";
+import { emitMatchEvent } from "../utils/emitMatchUpdate.js";
+
 // Utility: shuffle array (Fisher-Yates)
 const shuffleArray = (arr) => {
   const a = [...arr];
@@ -28,56 +30,37 @@ const nearestPowerOfTwo = (n) => {
 };
 
 async function progressKnockoutWinner(match) {
-  // 1️⃣ Fetch current stage
   const currentStage = await Stage.findById(match.stageid);
   if (!currentStage) return;
 
-  // 2️⃣ Find next stage
   const nextStage = await Stage.findOne({
     eventid: match.eventid,
     order: { $gt: currentStage.order }
   }).sort({ order: 1 });
 
-  // Final has no next stage
-  if (!nextStage) return;
+  if (!nextStage) return; // final reached
 
-  // 3️⃣ Find match index in current stage
-  const matchIndex = currentStage.matches.findIndex(
-    id => id.toString() === match._id.toString()
-  );
+  // 🔥 USE SLOT INDEX (NOT ARRAY ORDER)
+  const currentSlot = match.slotIndex;
+  const nextMatchSlot = Math.floor(currentSlot / 2);
+  const nextTeamSlot = currentSlot % 2 === 0 ? "teamA" : "teamB";
 
-  if (matchIndex === -1) {
-    throw new Error("Match not found in its stage");
-  }
-
-  // 4️⃣ Determine next match + slot
-  const nextMatchIndex = Math.floor(matchIndex / 2);
-  const slot = matchIndex % 2 === 0 ? "teamA" : "teamB";
-
-  const nextMatchId = nextStage.matches[nextMatchIndex];
+  const nextMatchId = nextStage.matches[nextMatchSlot];
   if (!nextMatchId) return;
 
-  // 5️⃣ Atomic update (NO overwrite, NO duplicate)
-  const update = {};
-  update[`${slot}.teamId`] = match.winner;
-
-  const updated = await Match.findOneAndUpdate(
+  await Match.findOneAndUpdate(
     {
       _id: nextMatchId,
-      [`${slot}.teamId`]: null,
-      $nor: [
-        { "teamA.teamId": match.winner },
-        { "teamB.teamId": match.winner }
-      ]
+      [`${nextTeamSlot}.teamId`]: null
     },
-    { $set: update },
-    { new: true }
+    {
+      $set: {
+        [`${nextTeamSlot}.teamId`]: match.winner
+      }
+    }
   );
-
-  if (!updated) {
-    console.warn("[PROGRESSION] Slot already filled or duplicate prevented");
-  }
 }
+
 
 
 const router=express.Router();
@@ -535,149 +518,50 @@ router.post("/:eventId/schedule", authenticate, async (req, res) => {
   const { eventId } = req.params;
   const { type } = req.body;
 
-  console.log("=====================================");
-  console.log("[SCHEDULE] Schedule generation request");
-  console.log("[SCHEDULE] User:", userId);
-  console.log("[SCHEDULE] Event:", eventId);
-  console.log("[SCHEDULE] Type:", type);
-  console.log("=====================================");
-
   try {
-    // 1️⃣ Validate type
-    if (!type) {
-      console.log("[SCHEDULE][ERROR] type missing");
-      return res.status(400).json({ message: "Schedule type is required" });
-    }
-
     if (!["KNOCKOUT", "LEAGUE_FINAL"].includes(type)) {
-      console.log("[SCHEDULE][ERROR] invalid type:", type);
       return res.status(400).json({ message: "Invalid schedule type" });
     }
 
-    // 2️⃣ Fetch event
     const event = await Event.findById(eventId);
-    if (!event) {
-      console.log("[SCHEDULE][ERROR] Event not found");
-      return res.status(404).json({ message: "Event not found" });
-    }
+    if (!event) return res.status(404).json({ message: "Event not found" });
 
-    console.log("[SCHEDULE] Event found:", event.name);
-
-    // 3️⃣ Permission check
-    const isAdmin = event.admin.map(id => id.toString()).includes(userId);
-    const isManager = event.managers.map(id => id.toString()).includes(userId);
-
-    console.log("[SCHEDULE] isAdmin:", isAdmin);
-    console.log("[SCHEDULE] isManager:", isManager);
-
+    const isAdmin = event.admin.some(id => id.toString() === userId);
+    const isManager = event.managers.some(id => id.toString() === userId);
     if (!isAdmin && !isManager) {
-      console.log("[SCHEDULE][ERROR] Unauthorized");
       return res.status(403).json({ message: "Not authorized" });
     }
 
-    // 4️⃣ Check existing stages
     const existingStages = await Stage.find({ eventid: eventId });
-
-    console.log("[SCHEDULE] Existing stages:", existingStages.length);
-
     if (existingStages.length > 0) {
-      console.log("[SCHEDULE][ERROR] Schedule already exists");
-      return res.status(400).json({
-        message: "Schedule already generated"
-      });
+      return res.status(400).json({ message: "Schedule already exists" });
     }
 
-    // ======================================================
-    // 🟢 KNOCKOUT SCHEDULING
-    // ======================================================
+    // ===========================
+    // 🟢 KNOCKOUT
+    // ===========================
     if (type === "KNOCKOUT") {
 
-      console.log("[KNOCKOUT] Fetching teams...");
-
       const teams = await Team.find({ eventid: eventId });
-
-      console.log("[KNOCKOUT] Teams found:", teams.length);
-
       if (teams.length < 2) {
-        console.log("[KNOCKOUT][ERROR] Not enough teams");
-        return res.status(400).json({
-          message: "At least 2 teams required"
-        });
+        return res.status(400).json({ message: "At least 2 teams required" });
       }
 
-      // Shuffle ONCE
       const shuffledTeams = shuffleArray(teams);
-      const totalTeams = shuffledTeams.length;
-      const baseSize = nearestPowerOfTwo(totalTeams);
-
-      console.log("[KNOCKOUT] Teams shuffled");
-      console.log("[KNOCKOUT] Base size:", baseSize);
+      const baseSize = nearestPowerOfTwo(shuffledTeams.length);
 
       const createdStages = [];
 
-      // -------------------------
-      // PRELIMINARY ROUND
-      // -------------------------
-      if (totalTeams > baseSize) {
-        const prelimMatchCount = totalTeams - baseSize;
-        const prelimTeamsCount = prelimMatchCount * 2;
-
-        console.log("[KNOCKOUT] Preliminary matches:", prelimMatchCount);
-
-        const prelimTeams = shuffledTeams.slice(0, prelimTeamsCount);
-
-        const prelimStage = await Stage.create({
-          eventid: eventId,
-          name: "Preliminary Round",
-          type: "KNOCKOUT",
-          order: 1,
-          teams: prelimTeams.map(t => t._id)
-        });
-
-        console.log("[KNOCKOUT] Preliminary stage created:", prelimStage._id);
-
-        const prelimMatches = [];
-
-        for (let i = 0; i < prelimTeams.length; i += 2) {
-          const teamA = prelimTeams[i];
-          const teamB = prelimTeams[i + 1];
-
-          console.log(
-            `[KNOCKOUT][PRELIM MATCH] ${teamA.teamname} vs ${teamB.teamname}`
-          );
-
-          const match = await Match.create({
-            eventid: eventId,
-            stageid: prelimStage._id,
-            matchType: "KNOCKOUT",
-            teamA: { teamId: teamA._id },
-            teamB: { teamId: teamB._id }
-          });
-
-          prelimMatches.push(match._id);
-        }
-
-        prelimStage.matches = prelimMatches;
-        await prelimStage.save();
-
-        createdStages.push(prelimStage);
-      }
-
-      // -------------------------
-      // MAIN ROUNDS (STAGES)
-      // -------------------------
+      // ---- CREATE STAGES ----
       let roundTeams = baseSize;
-      let order = createdStages.length + 1;
+      let order = 1;
 
       while (roundTeams >= 2) {
-        let name = "";
-
-        if (roundTeams === 2) name = "Final";
-        else if (roundTeams === 4) name = "Semi Final";
-        else if (roundTeams === 8) name = "Quarter Final";
-        else name = `Round of ${roundTeams}`;
-
-        console.log("[KNOCKOUT] Creating stage:", name);
+        const name =
+          roundTeams === 2 ? "Final" :
+          roundTeams === 4 ? "Semi Final" :
+          roundTeams === 8 ? "Quarter Final" :
+          `Round of ${roundTeams}`;
 
         const stage = await Stage.create({
           eventid: eventId,
@@ -687,276 +571,116 @@ router.post("/:eventId/schedule", authenticate, async (req, res) => {
         });
 
         createdStages.push(stage);
-
         roundTeams /= 2;
         order++;
       }
 
-      console.log("[KNOCKOUT] Stages created:", createdStages.length);
+      // ---- CREATE MATCHES ----
+      for (const stage of createdStages) {
+        const matches = [];
 
-      // ======================================================
-      // STEP 3: CREATE MATCHES
-      // ======================================================
-      console.log("[KNOCKOUT][STEP 3] Creating matches...");
-
-      const stages = await Stage.find({ eventid: eventId })
-        .sort({ order: 1 });
-
-      const hasPreliminary = createdStages.some(
-        s => s.name === "Preliminary Round"
-      );
-
-      let teamsQueue = [...shuffledTeams];
-
-      for (const stage of stages) {
-
-        console.log("[KNOCKOUT] Processing stage:", stage.name);
-
-        let matches = [];
-
-        // QUARTER FINAL (only if no prelim)
-        if (stage.name === "Quarter Final" && !hasPreliminary) {
-
-          console.log("[KNOCKOUT] Creating Quarter Final matches");
-
-          for (let i = 0; i < teamsQueue.length; i += 2) {
-            const teamA = teamsQueue[i];
-            const teamB = teamsQueue[i + 1];
-
-            console.log(
-              `[QF MATCH] ${teamA.teamname} vs ${teamB.teamname}`
-            );
-
+        if (stage.name === "Quarter Final") {
+          for (let i = 0; i < shuffledTeams.length; i += 2) {
             const match = await Match.create({
               eventid: eventId,
               stageid: stage._id,
               matchType: "KNOCKOUT",
-              teamA: { teamId: teamA._id },
-              teamB: { teamId: teamB._id }
+              slotIndex: i / 2,
+              teamA: { teamId: shuffledTeams[i]._id },
+              teamB: { teamId: shuffledTeams[i + 1]._id }
             });
-
             matches.push(match._id);
           }
-        }
-        // SEMI & FINAL (placeholders)
-        else {
+        } else {
           const matchCount =
             stage.name === "Semi Final" ? 2 :
             stage.name === "Final" ? 1 : 0;
-
-          console.log(
-            `[KNOCKOUT] Creating ${matchCount} placeholder matches for ${stage.name}`
-          );
 
           for (let i = 0; i < matchCount; i++) {
             const match = await Match.create({
               eventid: eventId,
               stageid: stage._id,
               matchType: "KNOCKOUT",
+              slotIndex: i,
+              sourceMatchIndex: i * 2, // 🔥 critical
               teamA: { teamId: null },
               teamB: { teamId: null }
             });
-
             matches.push(match._id);
           }
         }
 
         stage.matches = matches;
         await stage.save();
-
-        console.log(
-          `[KNOCKOUT] ${stage.name} matches created: ${matches.length}`
-        );
       }
 
-      console.log("[KNOCKOUT] Schedule generation completed");
-
       return res.status(201).json({
-        message: "Knockout schedule created successfully",
-        stages: createdStages.map(s => ({
-          id: s._id,
-          name: s.name
-        }))
+        message: "Knockout schedule created successfully"
       });
     }
-    // ======================================================
-// 🟢 LEAGUE SCHEDULING (ROUND ROBIN)
-// ======================================================
-if (type === "LEAGUE_FINAL") {
 
-  console.log("[LEAGUE] Fetching teams...");
+    return res.status(400).json({ message: "Invalid type" });
 
-  const teams = await Team.find({ eventid: eventId });
-
-  console.log("[LEAGUE] Teams found:", teams.length);
-
-  if (teams.length < 2) {
-    console.log("[LEAGUE][ERROR] Not enough teams");
-    return res.status(400).json({
-      message: "At least 2 teams required for league"
-    });
-  }
-
-  // 1️⃣ Create League Stage
-  const leagueStage = await Stage.create({
-    eventid: eventId,
-    name: "League Stage",
-    type: "LEAGUE",
-    order: 1
-  });
-
-  console.log("[LEAGUE] League stage created:", leagueStage._id);
-
-  // 2️⃣ Generate Round Robin Matches
-  const matches = [];
-
-  for (let i = 0; i < teams.length; i++) {
-    for (let j = i + 1; j < teams.length; j++) {
-
-      const teamA = teams[i];
-      const teamB = teams[j];
-
-      console.log(
-        `[LEAGUE MATCH] ${teamA.teamname} vs ${teamB.teamname}`
-      );
-
-      const match = await Match.create({
-        eventid: eventId,
-        stageid: leagueStage._id,
-        matchType: "LEAGUE",
-        teamA: { teamId: teamA._id, score: 0 },
-        teamB: { teamId: teamB._id, score: 0 }
-      });
-
-      matches.push(match._id);
-    }
-  }
-
-  // 3️⃣ Attach matches to stage
-  leagueStage.matches = matches;
-  await leagueStage.save();
-
-  console.log("[LEAGUE] Total matches created:", matches.length);
-
-  return res.status(201).json({
-    message: "League schedule created successfully",
-    stage: {
-      id: leagueStage._id,
-      name: leagueStage.name
-    },
-    totalTeams: teams.length,
-    totalMatches: matches.length
-  });
-}
-
-
-    // ======================================================
-    // LEAGUE_FINAL (later)
-    // ======================================================
-    return res.status(200).json({
-      message: "League scheduling will be implemented later"
-    });
-
-  } catch (error) {
-    console.error("[SCHEDULE][CRITICAL]", error);
-    return res.status(500).json({
-      message: "Server error while generating schedule"
-    });
+  } catch (err) {
+    console.error("[SCHEDULE ERROR]", err);
+    return res.status(500).json({ message: "Server error" });
   }
 });
+
 router.put("/matches/:matchId/teams", authenticate, async (req, res) => {
   const userId = req.user.id;
   const { matchId } = req.params;
   const { teamA, teamB } = req.body;
 
-  console.log("=====================================");
-  console.log("[ADMIN] Edit match teams");
-  console.log("[ADMIN] User:", userId);
-  console.log("[ADMIN] Match:", matchId);
-  console.log("[ADMIN] New Teams:", teamA, teamB);
-  console.log("=====================================");
-
   try {
-    if (!teamA || !teamB) {
-      return res.status(400).json({ message: "Both teams are required" });
+    if (!teamA || !teamB || teamA === teamB) {
+      return res.status(400).json({ message: "Invalid teams" });
     }
 
-    if (teamA === teamB) {
-      return res.status(400).json({ message: "Teams must be different" });
-    }
-
-    // 1️⃣ Fetch match
     const match = await Match.findById(matchId);
-    if (!match) {
-      return res.status(404).json({ message: "Match not found" });
-    }
+    if (!match) return res.status(404).json({ message: "Match not found" });
 
-    // 2️⃣ Match must be upcoming
     if (match.status !== "upcoming") {
-      return res.status(400).json({
-        message: "Cannot edit match after it has started"
-      });
+      return res.status(400).json({ message: "Match already started" });
     }
 
-    // 3️⃣ Fetch event
     const event = await Event.findById(match.eventid);
-    if (!event) {
-      return res.status(404).json({ message: "Event not found" });
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    if (event.isScheduleLocked) {
+      return res.status(403).json({ message: "Schedule locked" });
     }
-    // 🔒 Schedule lock check
-if (event.isScheduleLocked) {
-  return res.status(403).json({
-    message: "Schedule is locked. Match editing not allowed."
-  });
-}
 
-
-    // 4️⃣ Permission check
-    const isAdmin = event.admin.map(id => id.toString()).includes(userId);
-    const isManager = event.managers.map(id => id.toString()).includes(userId);
-
+    const isAdmin = event.admin.some(id => id.toString() === userId);
+    const isManager = event.managers.some(id => id.toString() === userId);
     if (!isAdmin && !isManager) {
-      return res.status(403).json({ message: "Not authorized" });
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
-    // 5️⃣ Validate teams belong to this event
     const teamADoc = await Team.findById(teamA);
-const teamBDoc = await Team.findById(teamB);
+    const teamBDoc = await Team.findById(teamB);
 
-if (!teamADoc || !teamBDoc) {
-  return res.status(404).json({ message: "Team not found" });
-}
+    if (
+      !teamADoc ||
+      !teamBDoc ||
+      teamADoc.eventid.toString() !== event._id.toString() ||
+      teamBDoc.eventid.toString() !== event._id.toString()
+    ) {
+      return res.status(400).json({ message: "Teams invalid for event" });
+    }
 
-if (
-  teamADoc.eventid.toString() !== match.eventid.toString() ||
-  teamBDoc.eventid.toString() !== match.eventid.toString()
-) {
-  return res.status(400).json({
-    message: "Teams do not belong to this event"
-  });
-}
-
-
-    // 6️⃣ Update match
     match.teamA.teamId = teamA;
     match.teamB.teamId = teamB;
-
     await match.save();
 
-    console.log("[ADMIN] Match teams updated successfully");
+    return res.json({ message: "Match teams updated" });
 
-    return res.status(200).json({
-      message: "Match teams updated",
-      matchId: match._id
-    });
-
-  } catch (error) {
-    console.error("[ADMIN][ERROR]", error);
-    return res.status(500).json({
-      message: "Server error while updating match"
-    });
+  } catch (err) {
+    console.error("[EDIT MATCH TEAMS ERROR]", err);
+    return res.status(500).json({ message: "Server error" });
   }
 });
+
 
 router.put("/:eventId/lock-schedule", authenticate, async (req, res) => {
   const userId = req.user.id;
@@ -974,28 +698,42 @@ router.put("/:eventId/lock-schedule", authenticate, async (req, res) => {
       return res.status(404).json({ message: "Event not found" });
     }
 
-    // Admin only
-    const isAdmin = event.admin.map(id => id.toString()).includes(userId);
+    // 🔒 Admin only
+    const isAdmin = event.admin.some(id => id.toString() === userId);
     if (!isAdmin) {
-      return res.status(403).json({ message: "Only admin can lock schedule" });
-    }
-
-    // Schedule must exist
-    const stagesCount = await Stage.countDocuments({ eventid: eventId });
-    if (stagesCount === 0) {
-      return res.status(400).json({
-        message: "Cannot lock schedule before it is generated"
+      return res.status(403).json({
+        message: "Only admin can lock schedule"
       });
     }
 
-    // Already locked?
+    // 🔍 Schedule must exist
+    const stages = await Stage.find({ eventid: eventId }).populate("matches");
+    if (stages.length === 0) {
+      return res.status(400).json({
+        message: "Cannot lock schedule before generation"
+      });
+    }
+
+    // 🔍 Ensure all matches have teams assigned
+    for (const stage of stages) {
+      for (const matchId of stage.matches) {
+        const match = await Match.findById(matchId);
+        if (!match?.teamA?.teamId || !match?.teamB?.teamId) {
+          return res.status(400).json({
+            message: "All matches must have teams before locking schedule"
+          });
+        }
+      }
+    }
+
+    // 🔁 Already locked
     if (event.isScheduleLocked) {
       return res.status(400).json({
         message: "Schedule is already locked"
       });
     }
 
-    // Lock it
+    // 🔐 Atomic lock
     event.isScheduleLocked = true;
     await event.save();
 
@@ -1013,6 +751,7 @@ router.put("/:eventId/lock-schedule", authenticate, async (req, res) => {
     });
   }
 });
+
 router.put("/:matchId/status", authenticate, async (req, res) => {
   const userId = req.user.id;
   const { matchId } = req.params;
@@ -1026,82 +765,60 @@ router.put("/:matchId/status", authenticate, async (req, res) => {
   console.log("=====================================");
 
   try {
-    // 1️⃣ Validate status
-    if (!["live", "finished"].includes(status)) {
+    // ✅ Only allow LIVE
+    if (status !== "live") {
       return res.status(400).json({
-        message: "Invalid status update"
+        message: "Only 'live' status is allowed here"
       });
     }
 
-    // 2️⃣ Fetch match
     const match = await Match.findById(matchId);
     if (!match) {
       return res.status(404).json({ message: "Match not found" });
     }
 
-    // 3️⃣ Fetch event
     const event = await Event.findById(match.eventid);
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
     }
 
-    // 4️⃣ Schedule must be locked
+    // 🔒 Schedule must be locked
     if (!event.isScheduleLocked) {
       return res.status(403).json({
-        message: "Schedule must be locked before starting matches"
+        message: "Lock schedule before starting matches"
       });
     }
 
-    // 5️⃣ Permission check
-    const isAdmin = event.admin.map(id => id.toString()).includes(userId);
-    const isManager = event.managers.map(id => id.toString()).includes(userId);
-
+    const isAdmin = event.admin.some(id => id.toString() === userId);
+    const isManager = event.managers.some(id => id.toString() === userId);
     if (!isAdmin && !isManager) {
-      return res.status(403).json({
-        message: "Not authorized to update match status"
-      });
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
-    // 6️⃣ Validate transition
-    const currentStatus = match.status;
-
-    if (currentStatus === "upcoming" && status !== "live") {
+    if (match.status !== "upcoming") {
       return res.status(400).json({
-        message: "Match must go live before finishing"
+        message: "Match already started or finished"
       });
     }
 
-    if (currentStatus === "live" && status !== "finished") {
-      return res.status(400).json({
-        message: "Invalid match status transition"
-      });
-    }
-
-    if (currentStatus === "finished") {
-      return res.status(400).json({
-        message: "Match already finished"
-      });
-    }
-
-    // 7️⃣ Update status
-    match.status = status;
+    match.status = "live";
     await match.save();
 
-    console.log("[MATCH STATUS] Updated successfully");
+    console.log("[MATCH STATUS] Match is live");
 
-    return res.status(200).json({
-      message: "Match status updated",
-      matchId,
-      status
+    return res.json({
+      message: "Match started",
+      matchId
     });
 
   } catch (error) {
     console.error("[MATCH STATUS][ERROR]", error);
     return res.status(500).json({
-      message: "Server error while updating match status"
+      message: "Server error"
     });
   }
 });
+
 router.put("/:matchId/result", authenticate, async (req, res) => {
   const userId = req.user.id;
   const { matchId } = req.params;
@@ -1109,7 +826,9 @@ router.put("/:matchId/result", authenticate, async (req, res) => {
 
   try {
     if (!winnerTeamId) {
-      return res.status(400).json({ message: "Winner team is required" });
+      return res.status(400).json({
+        message: "Winner team is required"
+      });
     }
 
     const match = await Match.findById(matchId);
@@ -1117,9 +836,16 @@ router.put("/:matchId/result", authenticate, async (req, res) => {
       return res.status(404).json({ message: "Match not found" });
     }
 
-    if (match.status !== "finished") {
-      return res.status(400).json({
-        message: "Match must be finished before declaring winner"
+    const event = await Event.findById(match.eventid);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // 🔒 ADMIN ONLY
+    const isAdmin = event.admin.some(id => id.toString() === userId);
+    if (!isAdmin) {
+      return res.status(403).json({
+        message: "Only admin can override results"
       });
     }
 
@@ -1134,28 +860,19 @@ router.put("/:matchId/result", authenticate, async (req, res) => {
 
     if (![teamA, teamB].includes(winnerTeamId)) {
       return res.status(400).json({
-        message: "Winner must be one of the match teams"
+        message: "Winner must be one of match teams"
       });
     }
 
-    // 1️⃣ Save winner
     match.winner = winnerTeamId;
+    match.status = "finished";
     await match.save();
 
-    // 2️⃣ Auto progression
     await progressKnockoutWinner(match);
 
-    // 3️⃣ Check if final
-    const stage = await Stage.findById(match.stageid);
-    if (stage?.name === "Final") {
-      return res.json({
-        message: "Tournament winner decided",
-        winnerTeamId
-      });
-    }
-
     return res.json({
-      message: "Winner declared & progressed"
+      message: "Winner overridden and progressed",
+      winnerTeamId
     });
 
   } catch (err) {
@@ -1163,6 +880,7 @@ router.put("/:matchId/result", authenticate, async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 });
+
 
 
 
@@ -1217,19 +935,17 @@ router.get("/:eventId/stages", authenticate, async (req, res) => {
       .sort({ order: 1 })
       .populate({
         path: "matches",
-        strictPopulate: false,   // 🔥 KEY FIX
+        options: { sort: { slotIndex: 1 } }, // 🔥 CRITICAL FIX
         populate: [
           {
             path: "teamA.teamId",
             model: "Team",
-            select: "teamname",
-            strictPopulate: false
+            select: "teamname"
           },
           {
             path: "teamB.teamId",
             model: "Team",
-            select: "teamname",
-            strictPopulate: false
+            select: "teamname"
           }
         ]
       });
@@ -1242,6 +958,7 @@ router.get("/:eventId/stages", authenticate, async (req, res) => {
     });
   }
 });
+
 
 // GET SINGLE MATCH
 router.get("/matches/:matchId", authenticate, async (req,res)=>{
@@ -1266,44 +983,65 @@ router.get("/matches/:matchId", authenticate, async (req,res)=>{
 });
 
 // GET FINAL WINNER
-router.get("/:eventId/winner", authenticate, async (req,res)=>{
+router.get("/:eventId/winner", authenticate, async (req, res) => {
   const { eventId } = req.params;
 
-  const finalStage = await Stage.findOne({
-    eventid:eventId,
-    name:"Final"
-  }).populate({
-    path:"matches",
-    populate:[
-      {path:"winner",select:"teamname"}
-    ]
-  });
+  try {
+    const finalStage = await Stage.findOne({
+      eventid: eventId,
+      name: "Final"
+    }).populate({
+      path: "matches",
+      populate: {
+        path: "winner",
+        select: "teamname"
+      }
+    });
 
-  if(!finalStage || finalStage.matches.length===0){
-    return res.json({winner:null});
+    if (
+      !finalStage ||
+      !finalStage.matches ||
+      finalStage.matches.length === 0
+    ) {
+      return res.json({ winner: null });
+    }
+
+    const finalMatch = finalStage.matches[0];
+
+    if (!finalMatch?.winner) {
+      return res.json({ winner: null });
+    }
+
+    return res.json({
+      winner: finalMatch.winner
+    });
+
+  } catch (err) {
+    console.error("[WINNER FETCH ERROR]", err);
+    return res.status(500).json({ message: "Server error" });
   }
-
-  const finalMatch = finalStage.matches[0];
-
-  return res.json({
-    winner: finalMatch.winner
-  });
 });
-router.put( "/matches/:matchId/round/score",
+
+router.put("/matches/:matchId/round/score",
   authenticate,
   async (req, res) => {
     const { matchId } = req.params;
     const { team, points } = req.body;
 
-    if (!["A", "B"].includes(team)) {
-      return res.status(400).json({ message: "team must be A or B" });
-    }
-
-    if (typeof points !== "number" || points < 0) {
-      return res.status(400).json({ message: "Invalid score value" });
-    }
+    console.log("=====================================");
+    console.log("[ROUND SCORE]");
+    console.log({ matchId, team, points });
+    console.log("=====================================");
 
     try {
+      if (!["A", "B"].includes(team)) {
+        return res.status(400).json({ message: "Invalid team" });
+      }
+
+      if (typeof points !== "number" || points < 0) {
+        return res.status(400).json({ message: "Invalid score value" });
+      }
+
       const match = await Match.findById(matchId);
       if (!match) {
         return res.status(404).json({ message: "Match not found" });
@@ -1313,74 +1051,42 @@ router.put( "/matches/:matchId/round/score",
         return res.status(400).json({ message: "Match is not live" });
       }
 
-      // 🔐 ADMIN / MANAGER CHECK
-      const event = await Event.findById(match.eventid);
-      const uid = req.user.id.toString();
+      let round = match.rounds.find(r => !r.isCompleted);
 
-      const isAdmin =
-        event.admin.some(id => id.toString() === uid) ||
-        event.managers.some(id => id.toString() === uid);
-
-      if (!isAdmin) {
-        return res.status(403).json({ message: "Not authorized" });
-      }
-
-      // 🔎 FIND ACTIVE ROUND
-      let round = match.rounds.find(
-        r => r.roundNo === match.currentRound
-      );
-
-      // 🧠 CREATE ROUND ONLY IF IT DOES NOT EXIST
       if (!round) {
+        const nextRoundNo =
+          match.rounds.length === 0
+            ? 1
+            : Math.max(...match.rounds.map(r => r.roundNo)) + 1;
+
         round = match.rounds.create({
-          roundNo: match.currentRound,
+          roundNo: nextRoundNo,
           teamA_score: 0,
           teamB_score: 0,
           isCompleted: false
         });
+
         match.rounds.push(round);
+
+        console.log("[ROUND SCORE] New round created:", nextRoundNo);
       }
 
-      // 🛑 DO NOT UPDATE COMPLETED ROUND
-      if (round.isCompleted) {
-        return res.status(400).json({
-          message: "Current round already completed"
-        });
-      }
-
-      // 🧮 UPDATE SCORE ONLY IF CHANGED
-      let changed = false;
-
-      if (team === "A" && round.teamA_score !== points) {
-        round.teamA_score = points;
-        changed = true;
-      }
-
-      if (team === "B" && round.teamB_score !== points) {
-        round.teamB_score = points;
-        changed = true;
-      }
-
-      if (!changed) {
-        return res.json({ message: "No score change" });
-      }
+      if (team === "A") round.teamA_score = points;
+      if (team === "B") round.teamB_score = points;
 
       await match.save();
 
-      // 🔊 SOCKET EMIT — LIVE AUDIENCE UPDATE
-      if (req.io) {
-        emitMatchEvent(
-          req.io,
-          match.eventid.toString(),
-          "match:round:update",
-          {
-            matchId: match._id.toString(),
-            roundNo: round.roundNo,
-            teamA_score: round.teamA_score,
-            teamB_score: round.teamB_score
-          }
-        );
-      }
+      emitMatchEvent(
+        req.io,
+        match.eventid.toString(),
+        "match:round:update",
+        {
+          matchId: match._id.toString(),
+          roundNo: round.roundNo,
+          teamA_score: round.teamA_score,
+          teamB_score: round.teamB_score
+        }
+      );
 
       return res.json({
         message: "Score updated",
@@ -1396,12 +1102,22 @@ router.put( "/matches/:matchId/round/score",
   }
 );
 
+
+
+
+
 router.post("/matches/:matchId/round/end",
   authenticate,
   async (req, res) => {
-    try {
-      const { matchId } = req.params;
+    const { matchId } = req.params;
+    const userId = req.user.id.toString();
 
+    console.log("=====================================");
+    console.log("[ROUND END]");
+    console.log({ matchId, userId });
+    console.log("=====================================");
+
+    try {
       const match = await Match.findById(matchId);
       if (!match) {
         return res.status(404).json({ message: "Match not found" });
@@ -1411,62 +1127,46 @@ router.post("/matches/:matchId/round/end",
         return res.status(400).json({ message: "Match is not live" });
       }
 
-      // 🔎 FIND CURRENT ROUND (ACTIVE ROUND ONLY)
-      const round = match.rounds.find(
-        r => r.roundNo === match.currentRound && !r.isCompleted
-      );
+      const event = await Event.findById(match.eventid);
+      const isAuthorized =
+        event.admin.some(id => id.toString() === userId) ||
+        event.managers.some(id => id.toString() === userId);
 
-      if (!round) {
-        return res.status(400).json({
-          message: "No active round found or round already ended"
-        });
+      if (!isAuthorized) {
+        return res.status(403).json({ message: "Not authorized" });
       }
 
-      // 🏆 DECIDE ROUND WINNER
+      const round = match.rounds.find(r => !r.isCompleted);
+      if (!round) {
+        return res.status(400).json({ message: "No active round" });
+      }
+
       if (round.teamA_score > round.teamB_score) {
         round.winner = match.teamA.teamId;
       } else if (round.teamB_score > round.teamA_score) {
         round.winner = match.teamB.teamId;
       } else {
-        round.winner = null; // draw
+        round.winner = null;
       }
 
       round.isCompleted = true;
-
-      // 👉 CREATE NEXT ROUND ONLY IF IT DOES NOT EXIST
-      const nextRoundNo = match.currentRound + 1;
-
-      const nextRoundExists = match.rounds.some(
-        r => r.roundNo === nextRoundNo
-      );
-
-      if (!nextRoundExists) {
-        match.rounds.push({
-          roundNo: nextRoundNo,
-          teamA_score: 0,
-          teamB_score: 0,
-          isCompleted: false
-        });
-      }
-
-      // 🔒 MOVE CURRENT ROUND POINTER (ONLY ONCE)
-      match.currentRound = nextRoundNo;
-
       await match.save();
 
-      // 🔊 SOCKET EMIT (EVENT ROOM)
-      if (req.io) {
-        req.io
-          .to(`event:${match.eventid.toString()}`)
-          .emit("match:round:ended", {
-            matchId: match._id,
-            roundNo: nextRoundNo - 1
-          });
-      }
+      emitMatchEvent(
+        req.io,
+        match.eventid.toString(),
+        "match:round:ended",
+        {
+          matchId: match._id.toString(),
+          roundNo: round.roundNo,
+          winner: round.winner
+        }
+      );
 
       return res.json({
-        message: "Round ended successfully",
-        currentRound: match.currentRound
+        message: "Round ended",
+        roundNo: round.roundNo,
+        winner: round.winner
       });
 
     } catch (err) {
@@ -1476,69 +1176,8 @@ router.post("/matches/:matchId/round/end",
   }
 );
 
-router.post("/matches/:matchId/end",
-  authenticate,
-  async (req, res) => {
-    try {
-      const { matchId } = req.params;
 
-      const match = await Match.findById(matchId)
-        .populate("teamA.teamId")
-        .populate("teamB.teamId");
 
-      if (!match) {
-        return res.status(404).json({ message: "Match not found" });
-      }
-
-      if (match.status !== "live") {
-        return res.status(400).json({ message: "Match is not live" });
-      }
-
-      // 🧮 COUNT ROUND WINS
-      const wins = {};
-      for (const r of match.rounds) {
-        if (r.isCompleted && r.winner) {
-          wins[r.winner.toString()] =
-            (wins[r.winner.toString()] || 0) + 1;
-        }
-      }
-
-      if (Object.keys(wins).length === 0) {
-        return res.status(400).json({ message: "No completed rounds" });
-      }
-
-      const winnerId = Object.keys(wins).sort(
-        (a, b) => wins[b] - wins[a]
-      )[0];
-
-      match.winner = winnerId;
-      match.status = "finished";
-
-      await match.save();
-
-      // 🔊 SOCKET
-      req.app.locals.io
-        ?.to(`event:${match.eventid}`)
-        .emit("match:ended", {
-          matchId,
-          winnerId
-        });
-
-      return res.json({
-        message: "Match ended",
-        winnerId,
-        winnerName:
-          winnerId === match.teamA.teamId._id.toString()
-            ? match.teamA.teamId.teamname
-            : match.teamB.teamId.teamname
-      });
-
-    } catch (err) {
-      console.error("[MATCH END ERROR]", err);
-      return res.status(500).json({ message: "Server error" });
-    }
-  }
-);
 
 
 
@@ -1548,12 +1187,14 @@ router.put("/matches/:matchId/status",
     const { matchId } = req.params;
     const { status } = req.body;
 
-    if (!["live"].includes(status)) {
+    if (status !== "live") {
       return res.status(400).json({ message: "Invalid status" });
     }
 
     const match = await Match.findById(matchId);
-    if (!match) return res.status(404).json({ message: "Match not found" });
+    if (!match) {
+      return res.status(404).json({ message: "Match not found" });
+    }
 
     if (match.status !== "upcoming") {
       return res.status(400).json({
@@ -1562,26 +1203,28 @@ router.put("/matches/:matchId/status",
     }
 
     const event = await Event.findById(match.eventid);
-    if (
-      !event.admin.map(id => id.toString()).includes(req.user.id) &&
-      !event.managers.map(id => id.toString()).includes(req.user.id)
-    ) {
+    const isAuthorized =
+      event.admin.some(id => id.toString() === req.user.id) ||
+      event.managers.some(id => id.toString() === req.user.id);
+
+    if (!isAuthorized) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
     match.status = "live";
     await match.save();
 
-    // socket broadcast
-    if (req.io) {
-      emitMatchEvent(req.io, match.eventid.toString(), "match:started", {
-        matchId
-      });
-    }
+    emitMatchEvent(
+      req.io,
+      match.eventid.toString(),
+      "match:started",
+      { matchId }
+    );
 
-    res.json({ message: "Match started" });
+    return res.json({ message: "Match started" });
   }
 );
+
 
 router.post("/matches/:matchId/start",
   authenticate,
@@ -1616,68 +1259,87 @@ router.post("/matches/:matchId/start",
 );
 router.post("/matches/:matchId/end",
   authenticate,
-  checkmanager,
   async (req, res) => {
     try {
       const { matchId } = req.params;
-      const userId = req.user.id;
+      const userId = req.user.id.toString();
 
       const match = await Match.findById(matchId);
-      if (!match)
+      if (!match) {
         return res.status(404).json({ message: "Match not found" });
+      }
 
-      if (match.status === "finished")
+      if (match.status === "finished") {
         return res.status(400).json({ message: "Match already ended" });
+      }
 
       const event = await Event.findById(match.eventid);
-      if (!event)
-        return res.status(404).json({ message: "Event not found" });
+      const isAuthorized =
+        event.admin.some(id => id.toString() === userId) ||
+        event.managers.some(id => id.toString() === userId);
 
-      const isAdmin = event.admin.map(id => id.toString()).includes(userId);
-      const isManager = event.managers.map(id => id.toString()).includes(userId);
-
-      if (!isAdmin && !isManager)
+      if (!isAuthorized) {
         return res.status(403).json({ message: "Unauthorized" });
+      }
 
-      // 🔒 Ensure last round is completed
-      const lastRound = match.rounds.find(
-        r => r.roundNo === match.currentRound
-      );
-
-      if (lastRound && !lastRound.isCompleted) {
+      const activeRound = match.rounds.find(r => !r.isCompleted);
+      if (activeRound) {
         return res.status(400).json({
-          message: "Current round must be ended before ending match"
+          message: "End the current round before ending match"
         });
       }
 
-      // 🏆 Decide winner
-      const finalRound = match.rounds[match.rounds.length - 1];
-      match.winner = finalRound?.winner || null;
-      match.status = "finished";
+      const wins = {};
+      for (const r of match.rounds) {
+        if (r.isCompleted && r.winner) {
+          wins[r.winner.toString()] =
+            (wins[r.winner.toString()] || 0) + 1;
+        }
+      }
 
+      const winnerId = Object.keys(wins).sort(
+        (a, b) => wins[b] - wins[a]
+      )[0];
+
+      if (!winnerId) {
+        return res.status(400).json({
+          message: "Winner could not be decided"
+        });
+      }
+
+      match.winner = winnerId;
+      match.status = "finished";
       await match.save();
 
-      // ➡️ Progress knockout winner
-      if (match.matchType === "KNOCKOUT" && match.winner) {
+      if (match.matchType === "KNOCKOUT") {
         await progressKnockoutWinner(match);
       }
 
-      // 🔴 SOCKET EMIT
-      req.io.to(`event:${match.eventid}`).emit("match:ended", {
-        matchId: match._id,
-        winner: match.winner
-      });
+      emitMatchEvent(
+        req.io,
+        match.eventid.toString(),
+        "match:ended",
+        {
+          matchId: match._id.toString(),
+          winner: winnerId
+        }
+      );
 
-      res.json({
+      return res.json({
         message: "Match ended successfully",
-        winner: match.winner
+        winner: winnerId
       });
 
     } catch (err) {
-      console.error("END MATCH ERROR:", err);
-      res.status(500).json({ message: "Server error" });
+      console.error("[MATCH END ERROR]", err);
+      return res.status(500).json({ message: "Server error" });
     }
   }
 );
+
+
+
+
+
 
 export default router;

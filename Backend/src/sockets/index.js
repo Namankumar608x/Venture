@@ -107,21 +107,24 @@ export default function setupSocket(io) {
     // JOIN/LEAVE event room
     // -------------------
     socket.on("join:event", ({ eventId } = {}, ack) => {
-      console.log(`📥 join:event request for eventId=${eventId}`);
-      if (!eventId) {
-        console.warn("⚠ join:event missing eventId");
-        if (ack) ack({ success: false, error: "eventId required" });
-        return;
-      }
-      try {
-        socket.join(`event:${eventId}`);
-        console.log(`📍 Socket joined room event:${eventId}`);
-        if (ack) ack({ success: true });
-      } catch (e) {
-        console.error("🚨 join:event error:", e);
-        if (ack) ack({ success: false, error: "join failed" });
-      }
-    });
+  console.log(`📥 join:event request for eventId=${eventId}`);
+
+  if (!eventId) {
+    if (ack) ack({ success: false, error: "eventId required" });
+    return;
+  }
+
+  socket.join(`event:${eventId}`);
+
+  // 🔥 DEBUG: confirm rooms
+  console.log(
+    "🧩 Socket rooms after join:event:",
+    Array.from(socket.rooms)
+  );
+
+  if (ack) ack({ success: true });
+});
+
 
     socket.on("leave:event", ({ eventId } = {}, ack) => {
       console.log(`📤 leave:event request for eventId=${eventId}`);

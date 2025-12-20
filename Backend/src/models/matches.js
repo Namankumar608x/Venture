@@ -14,6 +14,12 @@ const matchSchema = new mongoose.Schema(
       required: true,
     },
 
+    // 🔥 FIXED POSITION IN STAGE (CRITICAL FOR KNOCKOUT)
+    slotIndex: {
+      type: Number, // 0,1,2,3...
+      required: true,
+    },
+
     matchType: {
       type: String,
       enum: ["KNOCKOUT", "LEAGUE"],
@@ -27,11 +33,19 @@ const matchSchema = new mongoose.Schema(
     },
 
     teamA: {
-      teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team" },
+      teamId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Team",
+        default: null,
+      },
     },
 
     teamB: {
-      teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team" },
+      teamId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Team",
+        default: null,
+      },
     },
 
     winner: {
@@ -75,6 +89,7 @@ const matchSchema = new mongoose.Schema(
       },
     ],
 
+    // informational only (UI)
     currentRound: {
       type: Number,
       default: 1,
