@@ -9,12 +9,7 @@ function Login() {
     emailOrUsername: "",
     password: "",
   });
-
   const [message, setMessage] = useState("");
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [loadingOtp, setLoadingOtp] = useState(false);
-
   const navigate = useNavigate();
 
   // Auto-login if token exists
@@ -41,7 +36,6 @@ function Login() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  /* ---------------- PASSWORD LOGIN (UNCHANGED) ---------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -67,67 +61,14 @@ function Login() {
     }
   };
 
-  /* ---------------- SEND OTP ---------------- */
-  const handleSendOtp = async () => {
-    if (!formData.emailOrUsername) {
-      setMessage("Please enter your email first");
-      return;
-    }
-
-    try {
-      setLoadingOtp(true);
-      setMessage("");
-
-      await axiosInstance.post("/auth/send-otp", {
-        email: formData.emailOrUsername,
-      });
-
-      setOtpSent(true);
-      setMessage("OTP sent to your email");
-    } catch (err) {
-      setMessage(err.response?.data?.message || "Failed to send OTP");
-    } finally {
-      setLoadingOtp(false);
-    }
-  };
-
-  /* ---------------- VERIFY OTP ---------------- */
-  const handleVerifyOtp = async () => {
-    if (!otp) {
-      setMessage("Please enter OTP");
-      return;
-    }
-
-    try {
-      setLoadingOtp(true);
-
-      const res = await axiosInstance.post("/auth/verify-otp", {
-        email: formData.emailOrUsername,
-        otp,
-      });
-
-      const token = res.data.accessToken;
-
-      localStorage.setItem("accessToken", token);
-      localStorage.setItem("refreshToken", res.data.refreshToken || "");
-      localStorage.setItem("user", JSON.stringify(res.data.user || {}));
-
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-
-      navigate("/home", { replace: true });
-    } catch (err) {
-      setMessage(err.response?.data?.message || "OTP verification failed");
-    } finally {
-      setLoadingOtp(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 text-gray-100">
       <div className="bg-gray-900/80 border border-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-md backdrop-blur">
+
         <h1 className="text-3xl font-bold text-center text-indigo-400 mb-1">
           Login
         </h1>
+
         <p className="text-center text-sm text-gray-400 mb-6">
           Welcome back to <span className="font-semibold text-indigo-300">Venture</span>
         </p>
@@ -159,57 +100,36 @@ function Login() {
               onChange={handleChange}
               placeholder="Enter your password"
               className="w-full mt-1 p-2.5 bg-gray-950 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              required
             />
           </div>
 
-          {/* PASSWORD LOGIN */}
+          {/* Forgot password link */}
+          <div className="text-right">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-indigo-400 hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+
           <button
             type="submit"
-            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2.5 rounded-lg font-semibold mt-2"
+            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2.5 rounded-lg font-semibold transition-colors"
           >
-            Login with Password
+            Login
           </button>
 
-          <div className="text-center my-4 text-gray-400">OR</div>
-
-          {/* OTP LOGIN */}
-          {!otpSent ? (
-            <button
-              type="button"
-              onClick={handleSendOtp}
-              disabled={loadingOtp}
-              className="w-full bg-gray-800 hover:bg-gray-700 text-white py-2.5 rounded-lg font-semibold"
-            >
-              {loadingOtp ? "Sending OTP..." : "Login with OTP"}
-            </button>
-          ) : (
-            <>
-              <input
-                type="text"
-                placeholder="Enter OTP"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                className="w-full mt-3 p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
-              />
-
-              <button
-                type="button"
-                onClick={handleVerifyOtp}
-                disabled={loadingOtp}
-                className="w-full mt-3 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg"
-              >
-                {loadingOtp ? "Verifying..." : "Verify OTP"}
-              </button>
-            </>
-          )}
-
           {message && (
-            <p className="text-center mt-4 text-sm text-red-400">{message}</p>
+            <p className="text-center mt-4 text-sm text-red-400">
+              {message}
+            </p>
           )}
         </form>
 
         <p className="text-sm text-center mt-6 text-gray-400">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link to="/signup" className="text-indigo-400 font-semibold hover:underline">
             Create one
           </Link>

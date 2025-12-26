@@ -9,6 +9,7 @@ const userSchema=new mongoose.Schema({
   clubs:[{type:mongoose.Schema.Types.ObjectId,ref:"Club",default:[]}],
   currentRefreshToken:{type:String,default:null},
   roll_number:{type:String},
+   isVerified: { type: Boolean, default: false },
   gender:{type:String},
   notifications: [
   {
