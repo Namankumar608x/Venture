@@ -6,6 +6,9 @@ import Club from "../models/club.js";
 import Event from "../models/events.js";
 import authenticate from "../middlewares/auth.js";
 import { checkmanager } from "../middlewares/roles.js";
+import OTP from "../models/otp.js";
+import { generateOtp } from "../utils/generateOtp.js";
+import { sendMail } from "../utils/sendMail.js";
 
 const router = express.Router();
 
