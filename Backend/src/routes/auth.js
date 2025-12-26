@@ -284,5 +284,82 @@ router.get("/me", authenticate, async (req, res) => {
     return res.status(401).json({ error: "Invalid access token" });
   }
 });
+router.post("/send-otp", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email)
+      return res.status(400).json({ message: "Email is required" });
+
+    // delete old OTPs
+    await OTP.deleteMany({ email });
+
+    const otp = generateOtp();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+
+    await OTP.create({
+      email,
+      otp: hashedOtp,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    });
+
+    await sendMail(email, otp);
+
+    return res.json({ message: "OTP sent successfully" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to send OTP" });
+  }
+});
+router.post("/verify-otp", async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const record = await OTP.findOne({ email });
+    if (!record)
+      return res.status(400).json({ message: "OTP not found" });
+
+    if (record.expiresAt < Date.now())
+      return res.status(400).json({ message: "OTP expired" });
+
+    const isValid = await bcrypt.compare(otp, record.otp);
+    if (!isValid)
+      return res.status(400).json({ message: "Invalid OTP" });
+
+    // create user if first time
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = await User.create({
+        email,
+        username: email.split("@")[0],
+        name: email.split("@")[0],
+        password: "OTP_LOGIN", // dummy, not used
+      });
+    }
+
+    await OTP.deleteMany({ email });
+
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+
+    user.currentRefreshToken = refreshToken;
+    await user.save();
+
+    return res.json({
+      message: "OTP login successful",
+      accessToken,
+      refreshToken,
+      user: {
+        id: user._id,
+        username: user.username,
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "OTP verification failed" });
+  }
+});
 
 export default router;
