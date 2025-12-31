@@ -20,127 +20,264 @@ export default function EventMatches() {
 
   const isAdmin = role === "admin" || role === "manager";
 
-  /* ================= FETCH EVENT ================= */
   useEffect(() => {
     const fetchEvent = async () => {
-      const res = await axiosInstance.get(
-        `/events/${eventId}`,
-        auth()
-      );
+      const res = await axiosInstance.get(`/events/${eventId}`, auth());
       setEvent(res.data.event);
       setRole(res.data.role);
     };
     fetchEvent();
   }, [eventId]);
 
-  /* ================= FETCH STAGES ================= */
   const fetchStages = async () => {
-    const res = await axiosInstance.get(
-      `/events/${eventId}/stages`,
-      auth()
-    );
-    setStages(res.data);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get(`/events/${eventId}/stages`, auth());
+      setStages(res.data);
+    } catch (error) {
+      console.error("Error fetching stages:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchStages();
   }, [eventId]);
 
-  /* ================= GENERATE SCHEDULE ================= */
   const generateSchedule = async () => {
-    setLoadingSchedule(true);
-    await axiosInstance.post(
-      `/events/${eventId}/schedule`,
-      { type: "KNOCKOUT" },
-      auth()
-    );
-    await fetchStages();
-    setLoadingSchedule(false);
+    try {
+      setLoadingSchedule(true);
+      await axiosInstance.post(
+        `/events/${eventId}/schedule`,
+        { type: "KNOCKOUT" },
+        auth()
+      );
+      await fetchStages();
+    } catch (error) {
+      console.error("Error generating schedule:", error);
+    } finally {
+      setLoadingSchedule(false);
+    }
   };
 
-  const scheduleExists = stages.length > 0;
-
   const statusColor = status => {
-    if (status === "finished") return "bg-emerald-600";
-    if (status === "live") return "bg-yellow-500";
-    return "bg-slate-600";
+    if (status === "finished") return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+    if (status === "live") return "bg-amber-500/20 text-amber-400 border-amber-500/30";
+    return "bg-blue-500/20 text-blue-400 border-blue-500/30";
+  };
+
+  const getTeamLabel = (match, side) => {
+    const teamData = match?.[side];
+    
+    // If team exists and has a name
+    if (teamData?.teamId?.teamname) {
+      return teamData.teamId.teamname;
+    }
+    
+    // If no team yet (waiting for previous match)
+    if (!teamData?.teamId) {
+      return "TBD";
+    }
+    
+    return "—";
+  };
+
+  const isByeMatch = (match) => {
+    // A bye match is one where one team is missing and the other auto-advanced
+    const hasTeamA = match.teamA?.teamId;
+    const hasTeamB = match.teamB?.teamId;
+    
+    return (hasTeamA && !hasTeamB) || (!hasTeamA && hasTeamB);
+  };
+
+  // Filter out bye matches from display
+  const getDisplayMatches = (matches) => {
+    return matches.filter(match => !isByeMatch(match) || match.status !== 'finished');
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
-        Loading matches...
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-slate-400">Loading matches...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Matches</h1>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+      {/* Header with glassmorphism effect */}
+      <div className="sticky top-0 z-10 backdrop-blur-xl bg-slate-900/80 border-b border-slate-700/50">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Tournament Bracket
+              </h1>
+              {event?.eventname && (
+                <p className="text-slate-400 mt-1">
+                  {event.eventname}
+                </p>
+              )}
+            </div>
 
-        {isAdmin && (
-          <button
-            onClick={generateSchedule}
-            disabled={scheduleExists || loadingSchedule}
-            className={`px-4 py-2 rounded-lg ${
-              scheduleExists
-                ? "bg-slate-600 cursor-not-allowed"
-                : "bg-green-600 hover:bg-green-700"
-            }`}
-          >
-            {scheduleExists
-              ? "Schedule Generated"
-              : loadingSchedule
-              ? "Generating..."
-              : "Generate Schedule"}
-          </button>
-        )}
+            {isAdmin && (
+              <button
+                onClick={generateSchedule}
+                disabled={loadingSchedule || stages.length > 0}
+                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 ${
+                  stages.length > 0
+                    ? "bg-slate-700/50 text-slate-500 cursor-not-allowed"
+                    : "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/30 hover:shadow-green-500/50 transform hover:scale-105"
+                }`}
+              >
+                {loadingSchedule ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Generating...</span>
+                  </>
+                ) : stages.length > 0 ? (
+                  <>
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Schedule Generated</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span>Generate Schedule</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
-      {stages.map(stage => (
-        <div key={stage._id} className="mb-8">
-          <h2 className="text-lg font-semibold mb-3">
-            {stage.name}
-          </h2>
-
-          <div className="space-y-3">
-            {stage.matches.map(match => {
-              const teamA =
-                match.teamA?.teamId?.teamname || "TBD";
-              const teamB =
-                match.teamB?.teamId?.teamname || "TBD";
+      {/* Matches Container */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {stages.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-slate-800 border border-slate-700 mb-4">
+              <svg className="w-10 h-10 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-slate-300 mb-2">No Schedule Yet</h3>
+            <p className="text-slate-500">Generate a schedule to start the tournament</p>
+          </div>
+        ) : (
+          <div className="space-y-10">
+            {stages.map((stage, stageIdx) => {
+              const displayMatches = getDisplayMatches(stage.matches);
+              
+              // Skip rendering stages with no matches to display
+              if (displayMatches.length === 0) return null;
 
               return (
-                <div
-                  key={match._id}
-                  onClick={() => {
-                    navigate(
-                      isAdmin
-                        ? `/events/${clubid}/${eventId}/matches/${match._id}`
-                        : `/events/${clubid}/${eventId}/matches/${match._id}/live`
-                    );
-                  }}
-                  className="flex justify-between items-center p-4 rounded-xl border border-slate-700 bg-slate-800 cursor-pointer hover:bg-slate-700"
-                >
-                  <p className="font-medium">
-                    {teamA} vs {teamB}
-                  </p>
+                <div key={stage._id} className="relative">
+                  {/* Stage Header */}
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg">
+                        {stageIdx + 1}
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-white">
+                          {stage.name}
+                        </h2>
+                        <p className="text-sm text-slate-400">
+                          {displayMatches.length} {displayMatches.length === 1 ? 'match' : 'matches'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex-1 h-px bg-gradient-to-r from-slate-700 to-transparent"></div>
+                  </div>
 
-                  <span
-                    className={`text-xs px-3 py-1 rounded-full ${statusColor(
-                      match.status
-                    )}`}
-                  >
-                    {match.status}
-                  </span>
+                  {/* Matches Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {displayMatches.map((match, matchIdx) => (
+                      <div
+                        key={match._id}
+                        onClick={() => {
+                          navigate(
+                            isAdmin
+                              ? `/events/${clubid}/${eventId}/matches/${match._id}`
+                              : `/events/${clubid}/${eventId}/matches/${match._id}/live`
+                          );
+                        }}
+                        className="group relative bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700/50 hover:border-blue-500/50 transition-all duration-300 overflow-hidden cursor-pointer hover:shadow-xl hover:shadow-blue-500/10 hover:scale-[1.02]"
+                      >
+                        {/* Match Number Badge */}
+                        <div className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-slate-700/50 flex items-center justify-center text-xs font-bold text-slate-400 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors">
+                          {matchIdx + 1}
+                        </div>
+
+                        <div className="p-5">
+                          {/* Team A */}
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center text-blue-400 font-bold border border-blue-500/30">
+                              {getTeamLabel(match, "teamA").charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-semibold text-white group-hover:text-blue-400 transition-colors">
+                                {getTeamLabel(match, "teamA")}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* VS Divider */}
+                          <div className="flex items-center gap-3 my-4">
+                            <div className="flex-1 h-px bg-slate-700"></div>
+                            <span className="text-xs font-bold text-slate-500 bg-slate-700/50 px-3 py-1 rounded-full">
+                              VS
+                            </span>
+                            <div className="flex-1 h-px bg-slate-700"></div>
+                          </div>
+
+                          {/* Team B */}
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center text-purple-400 font-bold border border-purple-500/30">
+                              {getTeamLabel(match, "teamB").charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-semibold text-white group-hover:text-purple-400 transition-colors">
+                                {getTeamLabel(match, "teamB")}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Status Badge */}
+                          <div className="flex justify-end">
+                            <span
+                              className={`text-xs font-semibold px-4 py-1.5 rounded-full border ${statusColor(
+                                match.status
+                              )} transition-all duration-300`}
+                            >
+                              {match.status === 'finished' ? '✓ Finished' : 
+                               match.status === 'live' ? '● Live' : 
+                               '◌ Upcoming'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Hover Overlay Effect */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 to-purple-500/0 group-hover:from-blue-500/5 group-hover:to-purple-500/5 transition-all duration-300 pointer-events-none"></div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               );
             })}
           </div>
-        </div>
-      ))}
+        )}
+      </div>
     </div>
   );
 }

@@ -14,9 +14,8 @@ const matchSchema = new mongoose.Schema(
       required: true,
     },
 
-    // 🔥 FIXED POSITION IN STAGE (CRITICAL FOR KNOCKOUT)
     slotIndex: {
-      type: Number, // 0,1,2,3...
+      type: Number,
       required: true,
     },
 
@@ -33,19 +32,27 @@ const matchSchema = new mongoose.Schema(
     },
 
     teamA: {
-      teamId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Team",
-        default: null,
-      },
+  teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team" },
+  autoAdvanced: { type: Boolean, default: false }
+},
+
+teamB: {
+  teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team" },
+  autoAdvanced: { type: Boolean, default: false }
+},
+
+
+    // ✅ REQUIRED FOR PROPAGATION
+    nextMatchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Match",
+      default: null,
     },
 
-    teamB: {
-      teamId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Team",
-        default: null,
-      },
+    nextSlot: {
+      type: String,
+      enum: ["teamA", "teamB"],
+      default: null,
     },
 
     winner: {
@@ -65,16 +72,6 @@ const matchSchema = new mongoose.Schema(
       default: "NORMAL",
     },
 
-    scheduleid: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Schedule",
-    },
-
-    time: {
-      type: Date,
-    },
-
-    // 🔥 LIVE SCORE ROUNDS
     rounds: [
       {
         roundNo: { type: Number, required: true },
@@ -89,7 +86,6 @@ const matchSchema = new mongoose.Schema(
       },
     ],
 
-    // informational only (UI)
     currentRound: {
       type: Number,
       default: 1,
@@ -98,5 +94,4 @@ const matchSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const Match = mongoose.model("Match", matchSchema);
-export default Match;
+export default mongoose.model("Match", matchSchema);

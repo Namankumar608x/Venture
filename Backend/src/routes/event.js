@@ -23,43 +23,77 @@ const shuffleArray = (arr) => {
 };
 
 // Utility: nearest lower power of 2
-const nearestPowerOfTwo = (n) => {
+const nextPowerOfTwo = (n) => {
   let p = 1;
-  while (p * 2 <= n) p *= 2;
+  while (p < n) p *= 2;
   return p;
 };
 
+// Add this utility function to your match routes or utils file
+
 async function progressKnockoutWinner(match) {
-  const currentStage = await Stage.findById(match.stageid);
-  if (!currentStage) return;
-
-  const nextStage = await Stage.findOne({
-    eventid: match.eventid,
-    order: { $gt: currentStage.order }
-  }).sort({ order: 1 });
-
-  if (!nextStage) return; // final reached
-
-  // 🔥 USE SLOT INDEX (NOT ARRAY ORDER)
-  const currentSlot = match.slotIndex;
-  const nextMatchSlot = Math.floor(currentSlot / 2);
-  const nextTeamSlot = currentSlot % 2 === 0 ? "teamA" : "teamB";
-
-  const nextMatchId = nextStage.matches[nextMatchSlot];
-  if (!nextMatchId) return;
-
-  await Match.findOneAndUpdate(
-    {
-      _id: nextMatchId,
-      [`${nextTeamSlot}.teamId`]: null
-    },
-    {
-      $set: {
-        [`${nextTeamSlot}.teamId`]: match.winner
-      }
+  try {
+    if (!match.winner) {
+      console.log("⚠️ No winner to propagate");
+      return;
     }
-  );
+
+    if (!match.nextMatchId) {
+      console.log("✅ This is the final match, no propagation needed");
+      return;
+    }
+
+    const nextMatch = await Match.findById(match.nextMatchId);
+    if (!nextMatch) {
+      console.error("❌ Next match not found:", match.nextMatchId);
+      return;
+    }
+
+    console.log(`🔄 Propagating winner from match ${match._id} to ${nextMatch._id}`);
+    console.log(`   Winner: ${match.winner}, Slot: ${match.nextSlot}`);
+
+    // Update the appropriate slot in the next match
+    if (match.nextSlot === 'teamA') {
+      nextMatch.teamA = {
+        teamId: match.winner,
+        autoAdvanced: true
+      };
+    } else if (match.nextSlot === 'teamB') {
+      nextMatch.teamB = {
+        teamId: match.winner,
+        autoAdvanced: true
+      };
+    }
+
+    await nextMatch.save();
+
+    console.log(`✅ Winner propagated successfully to ${match.nextSlot}`);
+
+    // Check if both teams are now filled and both auto-advanced (double bye scenario)
+    if (
+      nextMatch.teamA?.teamId && 
+      nextMatch.teamB?.teamId && 
+      nextMatch.teamA.autoAdvanced && 
+      nextMatch.teamB.autoAdvanced &&
+      nextMatch.status === 'upcoming'
+    ) {
+      console.log("⚠️ Both teams in next match are auto-advanced. Consider auto-scheduling.");
+      // You might want to auto-start this match or notify admins
+    }
+
+    return nextMatch;
+
+  } catch (err) {
+    console.error("❌ Error in progressKnockoutWinner:", err);
+    throw err;
+  }
 }
+
+// Export or add to your module
+export { progressKnockoutWinner };
+
+
+
 
 
 
@@ -514,172 +548,298 @@ router.post("/:eventId/queries", authenticate, async (req, res) => {
 // STEP 1: GENERATE SCHEDULE (SKELETON)
 // ---------------------------------------------------
 router.post("/:eventId/schedule", authenticate, async (req, res) => {
-  const userId = req.user.id;
   const { eventId } = req.params;
-  const { type } = req.body;
+  const userId = req.user.id;
 
   try {
-    if (!["KNOCKOUT", "LEAGUE_FINAL"].includes(type)) {
-      return res.status(400).json({ message: "Invalid schedule type" });
-    }
+    console.log("\n🎯 ========== SCHEDULE GENERATION STARTED ==========");
+    console.log("📋 Event ID:", eventId);
+    console.log("👤 User ID:", userId);
 
     const event = await Event.findById(eventId);
-    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (!event) {
+      console.log("❌ Event not found");
+      return res.status(404).json({ message: "Event not found" });
+    }
 
-    const isAdmin = event.admin.some(id => id.toString() === userId);
-    const isManager = event.managers.some(id => id.toString() === userId);
-    if (!isAdmin && !isManager) {
+    const isAdmin =
+      event.admin.some(id => id.toString() === userId) ||
+      event.managers.some(id => id.toString() === userId);
+
+    if (!isAdmin) {
+      console.log("❌ User not authorized");
       return res.status(403).json({ message: "Not authorized" });
     }
 
-    const existingStages = await Stage.find({ eventid: eventId });
-    if (existingStages.length > 0) {
+    if (await Stage.exists({ eventid: eventId })) {
+      console.log("⚠️ Schedule already exists");
       return res.status(400).json({ message: "Schedule already exists" });
     }
 
-    // ===========================
-    // 🟢 KNOCKOUT
-    // ===========================
-    if (type === "KNOCKOUT") {
+    const teams = await Team.find({ eventid: eventId });
+    console.log(`✅ Found ${teams.length} teams`);
+    
+    if (teams.length < 2) {
+      console.log("❌ Not enough teams");
+      return res.status(400).json({ message: "At least 2 teams required" });
+    }
 
-      const teams = await Team.find({ eventid: eventId });
-      if (teams.length < 2) {
-        return res.status(400).json({ message: "At least 2 teams required" });
+    // ---------------- HELPERS ----------------
+    const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+
+    const nextPowerOfTwo = n => {
+      let p = 1;
+      while (p < n) p *= 2;
+      return p;
+    };
+
+    const roundName = n => {
+      if (n === 2) return "Final";
+      if (n === 4) return "Semi Final";
+      if (n === 8) return "Quarter Final";
+      return `Round of ${n}`;
+    };
+
+    // ---------------- SETUP ----------------
+    const shuffled = shuffle(teams);
+    const totalTeams = shuffled.length;
+    const bracketSize = nextPowerOfTwo(totalTeams);
+    
+    // Calculate how many teams advance to round 2
+    const round2Size = bracketSize / 2;
+    
+    // Teams that need to play in round 1
+    const teamsPlayingRound1 = (totalTeams - round2Size) * 2;
+    
+    // Number of actual matches in round 1
+    const firstRoundMatchCount = teamsPlayingRound1 / 2;
+    
+    // Remaining teams get byes
+    const byeCount = totalTeams - teamsPlayingRound1;
+
+    console.log("\n📊 BRACKET CONFIGURATION:");
+    console.log("   Total Teams:", totalTeams);
+    console.log("   Bracket Size:", bracketSize);
+    console.log("   Round 2 Size:", round2Size);
+    console.log("   Teams Playing Round 1:", teamsPlayingRound1);
+    console.log("   First Round Matches:", firstRoundMatchCount);
+    console.log("   Bye Count:", byeCount);
+
+    // ---------------- CREATE ALL STAGES ----------------
+    console.log("\n🏆 CREATING STAGES...");
+    let stages = [];
+    let order = 1;
+    let size = bracketSize;
+
+    while (size >= 2) {
+      const stage = await Stage.create({
+        eventid: eventId,
+        name: roundName(size),
+        type: "KNOCKOUT",
+        order
+      });
+      console.log(`   ✓ Stage ${order}: ${roundName(size)} (${size} teams)`);
+      stages.push(stage);
+      size /= 2;
+      order++;
+    }
+
+    // ---------------- DISTRIBUTE TEAMS WITH BYES ----------------
+    console.log("\n🎲 DISTRIBUTING TEAMS...");
+    
+    const round1Slots = [];
+    
+    // First, create all the actual match slots
+    let teamIndex = 0;
+    for (let i = 0; i < firstRoundMatchCount; i++) {
+      const teamA = shuffled[teamIndex];
+      const teamB = shuffled[teamIndex + 1];
+      
+      console.log(`   Match Slot ${i}: ${teamA?.teamname || 'UNDEFINED'} vs ${teamB?.teamname || 'UNDEFINED'}`);
+      
+      if (!teamA || !teamB) {
+        console.error(`❌❌❌ CRITICAL: Missing team for match at slot ${i}`);
+        console.error(`   TeamA index: ${teamIndex}, TeamB index: ${teamIndex + 1}`);
+        console.error(`   Total teams: ${shuffled.length}`);
+        throw new Error(`Missing team for match at slot ${i}`);
       }
+      
+      round1Slots.push({
+        type: 'MATCH',
+        teamA: teamA,
+        teamB: teamB
+      });
+      teamIndex += 2;
+    }
+    
+    // Then, create bye slots for remaining teams
+    while (teamIndex < totalTeams) {
+      const team = shuffled[teamIndex];
+      console.log(`   Bye Slot ${round1Slots.length}: ${team?.teamname || 'UNDEFINED'} (ID: ${team?._id || 'NONE'})`);
+      
+      if (!team) {
+        console.error(`❌❌❌ CRITICAL: No team available for bye at index ${teamIndex}`);
+        throw new Error(`No team available for bye at index ${teamIndex}`);
+      }
+      
+      round1Slots.push({ 
+        type: 'BYE', 
+        team: team
+      });
+      teamIndex++;
+    }
 
-      const shuffledTeams = shuffleArray(teams);
-      const baseSize = nearestPowerOfTwo(shuffledTeams.length);
+    console.log(`\n✅ Slot distribution complete. Used ${teamIndex} teams.`);
+    console.log(`   Matches: ${firstRoundMatchCount}, Byes: ${byeCount}`);
+    
+    if (teamIndex !== totalTeams) {
+      console.error(`❌❌❌ CRITICAL: Team count mismatch!`);
+      console.error(`   Expected: ${totalTeams}, Used: ${teamIndex}`);
+      throw new Error(`Team distribution error: expected ${totalTeams}, used ${teamIndex}`);
+    }
 
-      const createdStages = [];
+    // ---------------- CREATE ROUND 1 MATCHES ----------------
+    console.log("\n⚔️ CREATING ROUND 1 MATCHES...");
+    const round1 = stages[0];
+    const round1Matches = [];
 
-      // ---- CREATE STAGES ----
-      let roundTeams = baseSize;
-      let order = 1;
-
-      while (roundTeams >= 2) {
-        const name =
-          roundTeams === 2 ? "Final" :
-          roundTeams === 4 ? "Semi Final" :
-          roundTeams === 8 ? "Quarter Final" :
-          `Round of ${roundTeams}`;
-
-        const stage = await Stage.create({
+    for (let i = 0; i < round1Slots.length; i++) {
+      const slot = round1Slots[i];
+      
+      if (slot.type === 'MATCH') {
+        console.log(`   Creating Match ${i + 1}: ${slot.teamA.teamname} vs ${slot.teamB.teamname}`);
+        
+        const match = await Match.create({
           eventid: eventId,
-          name,
-          type: "KNOCKOUT",
-          order
+          stageid: round1._id,
+          matchType: "KNOCKOUT",
+          slotIndex: i,
+          teamA: { teamId: slot.teamA._id, autoAdvanced: false },
+          teamB: { teamId: slot.teamB._id, autoAdvanced: false }
         });
-
-        createdStages.push(stage);
-        roundTeams /= 2;
-        order++;
+        
+        console.log(`      ✓ Match created: ${match._id}`);
+        round1Matches.push(match);
+        
+      } else {
+        // BYE
+        console.log(`   Creating BYE ${i + 1}: ${slot.team.teamname} auto-advances`);
+        
+        const match = await Match.create({
+          eventid: eventId,
+          stageid: round1._id,
+          matchType: "KNOCKOUT",
+          slotIndex: i,
+          teamA: { teamId: slot.team._id, autoAdvanced: true },
+          teamB: { teamId: null, autoAdvanced: false },
+          status: 'finished',
+          winner: slot.team._id
+        });
+        
+        console.log(`      ✓ BYE Match created: ${match._id}, Winner: ${slot.team._id}`);
+        round1Matches.push(match);
       }
+    }
 
-      // ---- CREATE MATCHES ----
-      for (const stage of createdStages) {
-        const matches = [];
+    round1.matches = round1Matches.map(m => m._id);
+    await round1.save();
+    console.log(`✅ Round 1 complete: ${round1Matches.length} matches created`);
 
-        if (stage.name === "Quarter Final") {
-          for (let i = 0; i < shuffledTeams.length; i += 2) {
-            const match = await Match.create({
-              eventid: eventId,
-              stageid: stage._id,
-              matchType: "KNOCKOUT",
-              slotIndex: i / 2,
-              teamA: { teamId: shuffledTeams[i]._id },
-              teamB: { teamId: shuffledTeams[i + 1]._id }
-            });
-            matches.push(match._id);
-          }
-        } else {
-          const matchCount =
-            stage.name === "Semi Final" ? 2 :
-            stage.name === "Final" ? 1 : 0;
-
-          for (let i = 0; i < matchCount; i++) {
-            const match = await Match.create({
-              eventid: eventId,
-              stageid: stage._id,
-              matchType: "KNOCKOUT",
-              slotIndex: i,
-              sourceMatchIndex: i * 2, // 🔥 critical
-              teamA: { teamId: null },
-              teamB: { teamId: null }
-            });
-            matches.push(match._id);
+    // ---------------- BUILD SUBSEQUENT ROUNDS ----------------
+    console.log("\n🔗 BUILDING SUBSEQUENT ROUNDS...");
+    
+    for (let i = 1; i < stages.length; i++) {
+      const stage = stages[i];
+      const prevStage = stages[i - 1];
+      
+      console.log(`\n   Building ${stage.name} (Stage ${i + 1})...`);
+      
+      const prevMatches = await Match.find({ stageid: prevStage._id }).sort({ slotIndex: 1 });
+      console.log(`      Previous stage has ${prevMatches.length} matches`);
+      
+      const matches = [];
+      
+      // Each pair of previous matches feeds into one next match
+      for (let j = 0; j < prevMatches.length; j += 2) {
+        const matchA = prevMatches[j];
+        const matchB = prevMatches[j + 1];
+        
+        console.log(`      Creating match from pair ${Math.floor(j / 2) + 1}:`);
+        console.log(`         Input A: Match ${matchA._id} (${matchA.winner ? 'has winner' : 'no winner'})`);
+        console.log(`         Input B: Match ${matchB?._id || 'NONE'} (${matchB?.winner ? 'has winner' : 'no winner'})`);
+        
+        const newMatch = await Match.create({
+          eventid: eventId,
+          stageid: stage._id,
+          matchType: "KNOCKOUT",
+          slotIndex: matches.length,
+          teamA: { teamId: null, autoAdvanced: false },
+          teamB: { teamId: null, autoAdvanced: false }
+        });
+        
+        console.log(`         ✓ New match created: ${newMatch._id}`);
+        
+        // Link matchA to teamA slot
+        if (matchA) {
+          matchA.nextMatchId = newMatch._id;
+          matchA.nextSlot = 'teamA';
+          await matchA.save();
+          console.log(`         ✓ Linked Match ${matchA._id} → teamA`);
+          
+          // If matchA already has winner (bye), propagate now
+          if (matchA.winner) {
+            newMatch.teamA = { teamId: matchA.winner, autoAdvanced: true };
+            console.log(`         ✓ Propagated winner to teamA: ${matchA.winner}`);
           }
         }
-
-        stage.matches = matches;
-        await stage.save();
+        
+        // Link matchB to teamB slot
+        if (matchB) {
+          matchB.nextMatchId = newMatch._id;
+          matchB.nextSlot = 'teamB';
+          await matchB.save();
+          console.log(`         ✓ Linked Match ${matchB._id} → teamB`);
+          
+          // If matchB already has winner (bye), propagate now
+          if (matchB.winner) {
+            newMatch.teamB = { teamId: matchB.winner, autoAdvanced: true };
+            console.log(`         ✓ Propagated winner to teamB: ${matchB.winner}`);
+          }
+        }
+        
+        await newMatch.save();
+        matches.push(newMatch);
       }
-
-      return res.status(201).json({
-        message: "Knockout schedule created successfully"
-      });
+      
+      stage.matches = matches.map(m => m._id);
+      await stage.save();
+      console.log(`   ✅ ${stage.name} complete: ${matches.length} matches created`);
     }
 
-    return res.status(400).json({ message: "Invalid type" });
+    console.log("\n✅ ========== SCHEDULE GENERATION COMPLETE ==========\n");
+
+    return res.status(201).json({
+      message: "Schedule created successfully",
+      totalTeams,
+      bracketSize,
+      byeCount,
+      firstRoundMatches: firstRoundMatchCount,
+      teamsPlayingRound1: firstRoundMatchCount * 2,
+      stages: stages.length
+    });
 
   } catch (err) {
-    console.error("[SCHEDULE ERROR]", err);
-    return res.status(500).json({ message: "Server error" });
+    console.error("\n❌❌❌ SCHEDULE ERROR:", err);
+    console.error("Stack trace:", err.stack);
+    res.status(500).json({ 
+      message: "Server error",
+      error: err.message 
+    });
   }
 });
 
-router.put("/matches/:matchId/teams", authenticate, async (req, res) => {
-  const userId = req.user.id;
-  const { matchId } = req.params;
-  const { teamA, teamB } = req.body;
 
-  try {
-    if (!teamA || !teamB || teamA === teamB) {
-      return res.status(400).json({ message: "Invalid teams" });
-    }
 
-    const match = await Match.findById(matchId);
-    if (!match) return res.status(404).json({ message: "Match not found" });
-
-    if (match.status !== "upcoming") {
-      return res.status(400).json({ message: "Match already started" });
-    }
-
-    const event = await Event.findById(match.eventid);
-    if (!event) return res.status(404).json({ message: "Event not found" });
-
-    if (event.isScheduleLocked) {
-      return res.status(403).json({ message: "Schedule locked" });
-    }
-
-    const isAdmin = event.admin.some(id => id.toString() === userId);
-    const isManager = event.managers.some(id => id.toString() === userId);
-    if (!isAdmin && !isManager) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
-    const teamADoc = await Team.findById(teamA);
-    const teamBDoc = await Team.findById(teamB);
-
-    if (
-      !teamADoc ||
-      !teamBDoc ||
-      teamADoc.eventid.toString() !== event._id.toString() ||
-      teamBDoc.eventid.toString() !== event._id.toString()
-    ) {
-      return res.status(400).json({ message: "Teams invalid for event" });
-    }
-
-    match.teamA.teamId = teamA;
-    match.teamB.teamId = teamB;
-    await match.save();
-
-    return res.json({ message: "Match teams updated" });
-
-  } catch (err) {
-    console.error("[EDIT MATCH TEAMS ERROR]", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-});
 
 
 router.put("/:eventId/lock-schedule", authenticate, async (req, res) => {
@@ -751,6 +911,62 @@ router.put("/:eventId/lock-schedule", authenticate, async (req, res) => {
     });
   }
 });
+router.put("/matches/:matchId/teams", authenticate, async (req, res) => {
+  const userId = req.user.id;
+  const { matchId } = req.params;
+  const { teamA, teamB } = req.body;
+
+  try {
+    if (!teamA || !teamB || teamA === teamB) {
+      return res.status(400).json({ message: "Invalid teams" });
+    }
+
+    const match = await Match.findById(matchId);
+    if (!match) return res.status(404).json({ message: "Match not found" });
+
+    if (match.status !== "upcoming") {
+      return res.status(400).json({ message: "Match already started" });
+    }
+
+    const event = await Event.findById(match.eventid);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    if (event.isScheduleLocked) {
+      return res.status(403).json({ message: "Schedule locked" });
+    }
+
+    const isAdmin = event.admin.some(id => id.toString() === userId);
+    const isManager = event.managers.some(id => id.toString() === userId);
+    if (!isAdmin && !isManager) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const teamADoc = await Team.findById(teamA);
+    const teamBDoc = await Team.findById(teamB);
+
+    if (
+      !teamADoc ||
+      !teamBDoc ||
+      teamADoc.eventid.toString() !== event._id.toString() ||
+      teamBDoc.eventid.toString() !== event._id.toString()
+    ) {
+      return res.status(400).json({ message: "Teams invalid for event" });
+    }
+
+    match.teamA.teamId = teamA;
+    match.teamB.teamId = teamB;
+    await match.save();
+
+    return res.json({ message: "Match teams updated" });
+
+  } catch (err) {
+    console.error("[EDIT MATCH TEAMS ERROR]", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+
 
 router.put("/:matchId/status", authenticate, async (req, res) => {
   const userId = req.user.id;
@@ -1257,85 +1473,80 @@ router.post("/matches/:matchId/start",
     res.json({ message: "Match started" });
   }
 );
-router.post("/matches/:matchId/end",
-  authenticate,
-  async (req, res) => {
-    try {
-      const { matchId } = req.params;
-      const userId = req.user.id.toString();
+router.post("/matches/:matchId/end", authenticate, async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const userId = req.user.id.toString();
 
-      const match = await Match.findById(matchId);
-      if (!match) {
-        return res.status(404).json({ message: "Match not found" });
-      }
-
-      if (match.status === "finished") {
-        return res.status(400).json({ message: "Match already ended" });
-      }
-
-      const event = await Event.findById(match.eventid);
-      const isAuthorized =
-        event.admin.some(id => id.toString() === userId) ||
-        event.managers.some(id => id.toString() === userId);
-
-      if (!isAuthorized) {
-        return res.status(403).json({ message: "Unauthorized" });
-      }
-
-      const activeRound = match.rounds.find(r => !r.isCompleted);
-      if (activeRound) {
-        return res.status(400).json({
-          message: "End the current round before ending match"
-        });
-      }
-
-      const wins = {};
-      for (const r of match.rounds) {
-        if (r.isCompleted && r.winner) {
-          wins[r.winner.toString()] =
-            (wins[r.winner.toString()] || 0) + 1;
-        }
-      }
-
-      const winnerId = Object.keys(wins).sort(
-        (a, b) => wins[b] - wins[a]
-      )[0];
-
-      if (!winnerId) {
-        return res.status(400).json({
-          message: "Winner could not be decided"
-        });
-      }
-
-      match.winner = winnerId;
-      match.status = "finished";
-      await match.save();
-
-      if (match.matchType === "KNOCKOUT") {
-        await progressKnockoutWinner(match);
-      }
-
-      emitMatchEvent(
-        req.io,
-        match.eventid.toString(),
-        "match:ended",
-        {
-          matchId: match._id.toString(),
-          winner: winnerId
-        }
-      );
-
-      return res.json({
-        message: "Match ended successfully",
-        winner: winnerId
-      });
-
-    } catch (err) {
-      console.error("[MATCH END ERROR]", err);
-      return res.status(500).json({ message: "Server error" });
+    const match = await Match.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ message: "Match not found" });
     }
+
+    if (match.status === "finished") {
+      return res.status(400).json({ message: "Match already ended" });
+    }
+
+    const event = await Event.findById(match.eventid);
+    const isAuthorized =
+      event.admin.some(id => id.toString() === userId) ||
+      event.managers.some(id => id.toString() === userId);
+
+    if (!isAuthorized) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const activeRound = match.rounds.find(r => !r.isCompleted);
+    if (activeRound) {
+      return res.status(400).json({
+        message: "End the current round before ending match"
+      });
+    }
+
+    // Count wins
+    const wins = {};
+    for (const r of match.rounds) {
+      if (r.isCompleted && r.winner) {
+        wins[r.winner.toString()] =
+          (wins[r.winner.toString()] || 0) + 1;
+      }
+    }
+
+    const winnerId = Object.keys(wins).sort(
+      (a, b) => wins[b] - wins[a]
+    )[0];
+
+    if (!winnerId) {
+      return res.status(400).json({ message: "Winner could not be decided" });
+    }
+
+    match.winner = winnerId;
+    match.status = "finished";
+    await match.save();
+
+    // ✅ FIXED: propagate winner safely
+    if (match.matchType === "KNOCKOUT") {
+  console.log("🔥 Triggering propagation for match:", match._id);
+  await progressKnockoutWinner(match);
+}
+
+
+    emitMatchEvent(req.io, match.eventid.toString(), "match:ended", {
+      matchId: match._id.toString(),
+      winner: winnerId
+    });
+
+    return res.json({
+      message: "Match ended successfully",
+      winner: winnerId
+    });
+
+  } catch (err) {
+    console.error("[MATCH END ERROR]", err);
+    return res.status(500).json({ message: "Server error" });
   }
-);
+});
+
 
 
 
