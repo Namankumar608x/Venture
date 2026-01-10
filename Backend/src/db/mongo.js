@@ -10,5 +10,4 @@ const mongo = async () => {
     console.error("MongoDB connection error:", error.message);
   }
 };
-
 export default mongo;
