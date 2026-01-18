@@ -119,7 +119,57 @@ router.post("/login", async (req, res) => {
 /* ============================================================
    LOGIN + JOIN CLUB
 ============================================================ */
+router.post("/:clubid/signup", async (req, res) => {
+  try {
+    const { clubid } = req.params;
+    const { username, name, email, password, roll_number, gender } = req.body;
 
+    if (await User.findOne({ email }) || await User.findOne({ username })) {
+      return res.status(400).json({ message: "User already exists!" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
+      username,
+      name,
+      email,
+      password: hashedPassword,
+      roll_number,
+      gender,
+    });
+     const club = await Club.findById(clubid);
+    if (!club)
+      return res.status(404).json({ message: "Club not found" });
+
+    if (!user.clubs.includes(clubid)) user.clubs.push(clubid);
+    if (!club.users.includes(user._id)) club.users.push(user._id);
+
+    await club.save();
+    await user.save();
+
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+
+    user.currentRefreshToken = refreshToken;
+    await user.save();
+
+    res.json({
+      message: "Signup successful",
+      accessToken,
+      refreshToken,
+      user: {
+        id: user._id,
+        username: user.username,
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error occurred!" });
+  }
+});
 router.post("/:clubid/login", async (req, res) => {
   try {
     const { clubid } = req.params;
