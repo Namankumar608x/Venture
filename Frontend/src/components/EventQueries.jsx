@@ -3,6 +3,7 @@ import axios from "axios";
 import { io } from "socket.io-client";
 import { useParams, useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
+
 export default function EventQueries() {
   const { eventId } = useParams();
   const navigate = useNavigate();
@@ -89,32 +90,76 @@ export default function EventQueries() {
   let lastDate = null;
 
   return (
-    <div className="min-h-screen bg-[#0b1220] flex flex-col text-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col text-white">
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .message-appear {
+          animation: slideUp 0.3s ease-out;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(15, 23, 42, 0.5);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(99, 102, 241, 0.5);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(99, 102, 241, 0.7);
+        }
+      `}</style>
 
       {/* HEADER */}
-      <div className="px-6 py-4 border-b border-white/10 bg-[#0f172a] flex items-center gap-4">
-        <button
-          onClick={() => navigate(-1)}
-          className="text-sm text-slate-300 hover:text-white"
-        >
-          ← Back
-        </button>
-        <div>
-          <h2 className="text-lg font-semibold">Event Support</h2>
-          <p className="text-xs text-slate-400">
-            Private chat with event organizers
-          </p>
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95 backdrop-blur-xl border-b border-slate-700/50 shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/10 via-purple-600/10 to-pink-600/10"></div>
+        <div className="relative px-8 py-6 flex items-center gap-6">
+          <button
+            onClick={() => navigate(-1)}
+            className="group w-11 h-11 rounded-xl bg-slate-800/50 hover:bg-indigo-600/20 border border-slate-700/50 hover:border-indigo-500/50 flex items-center justify-center transition-all duration-300 hover:scale-105"
+          >
+            <i className="fa-solid fa-arrow-left text-slate-400 group-hover:text-indigo-400 transition-colors"></i>
+          </button>
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-1">
+              <h2 className="text-2xl font-bold text-white">Event Support</h2>
+              <div className="px-3 py-1 rounded-full bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 text-xs font-medium flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                Online
+              </div>
+            </div>
+            <p className="text-sm text-slate-400">Private chat with event organizers</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/30">
+              <i className="fa-solid fa-headset"></i>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* CHAT BODY */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+      <div className="flex-1 overflow-y-auto px-8 py-8 space-y-6 custom-scrollbar">
         {loading ? (
-          <p className="text-slate-400">Loading…</p>
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-slate-400">Loading messages...</p>
+            </div>
+          </div>
         ) : messages.length === 0 ? (
-          <p className="text-slate-400">
-            No messages yet. Start the conversation.
-          </p>
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 flex items-center justify-center mb-6">
+              <i className="fa-solid fa-comments text-slate-600 text-4xl"></i>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">No messages yet</h3>
+            <p className="text-slate-400">Start the conversation with the event organizers</p>
+          </div>
         ) : (
           messages.map((m) => {
             const isMe = m.senderRole === "participant";
@@ -126,10 +171,10 @@ export default function EventQueries() {
               <React.Fragment key={m._id}>
                 {/* DATE SEPARATOR */}
                 {showDate && (
-                  <div className="flex justify-center">
-                    <span className="text-xs text-slate-400 bg-white/5 px-3 py-1 rounded-full">
+                  <div className="flex justify-center my-8">
+                    <div className="px-4 py-2 rounded-full bg-slate-800/50 backdrop-blur-md border border-slate-700/50 text-xs font-medium text-slate-400">
                       {msgDate}
-                    </span>
+                    </div>
                   </div>
                 )}
 
@@ -137,23 +182,48 @@ export default function EventQueries() {
                 <div
                   className={`flex ${
                     isMe ? "justify-end" : "justify-start"
-                  }`}
+                  } message-appear`}
                 >
-                  <div
-                    className={`max-w-[65%] rounded-xl px-4 py-3 text-sm
-                      ${
+                  <div className="flex items-end gap-3 max-w-[70%]">
+                    {!isMe && (
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-lg shadow-purple-500/30">
+                        <i className="fa-solid fa-user-tie"></i>
+                      </div>
+                    )}
+                    <div
+                      className={`relative overflow-hidden rounded-2xl px-5 py-4 ${
                         isMe
-                          ? "bg-indigo-600 text-white rounded-br-sm"
-                          : "bg-slate-700 text-white rounded-bl-sm"
+                          ? "bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-br-sm shadow-lg shadow-indigo-500/30"
+                          : "bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl border border-slate-700/50 text-white rounded-bl-sm"
                       }`}
-                  >
-                    <div className="text-xs opacity-70 mb-1">
-                      {isMe ? "You" : "Organizer"}
+                    >
+                      {!isMe && (
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-pink-500"></div>
+                      )}
+                      <div className="text-xs font-semibold opacity-70 mb-2 flex items-center gap-2">
+                        {isMe ? (
+                          <>
+                            <i className="fa-solid fa-user"></i>
+                            You
+                          </>
+                        ) : (
+                          <>
+                            <i className="fa-solid fa-shield-halved"></i>
+                            Organizer
+                          </>
+                        )}
+                      </div>
+                      <div className="text-[15px] leading-relaxed">{m.message}</div>
+                      <div className="text-[11px] opacity-60 mt-2 text-right flex items-center justify-end gap-1">
+                        <i className="fa-solid fa-clock"></i>
+                        {formatTime(m.createdAt)}
+                      </div>
                     </div>
-                    <div>{m.message}</div>
-                    <div className="text-[10px] opacity-60 mt-1 text-right">
-                      {formatTime(m.createdAt)}
-                    </div>
+                    {isMe && (
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-lg shadow-indigo-500/30">
+                        <i className="fa-solid fa-user"></i>
+                      </div>
+                    )}
                   </div>
                 </div>
               </React.Fragment>
@@ -164,26 +234,38 @@ export default function EventQueries() {
       </div>
 
       {/* INPUT */}
-      <div className="border-t border-white/10 bg-[#0f172a] px-6 py-4 flex gap-3">
-        <textarea
-          className="flex-1 resize-none bg-[#1e293b] rounded-xl px-4 py-3 text-sm focus:outline-none"
-          placeholder="Type your message..."
-          rows={2}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              sendMessage();
-            }
-          }}
-        />
-        <button
-          onClick={sendMessage}
-          className="bg-indigo-600 hover:bg-indigo-700 px-6 rounded-xl font-medium"
-        >
-          Send
-        </button>
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95 backdrop-blur-xl border-t border-slate-700/50 shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/5 via-purple-600/5 to-transparent"></div>
+        <div className="relative px-8 py-6">
+          <div className="flex gap-4 items-end">
+            <div className="flex-1 relative">
+              <textarea
+                className="w-full bg-slate-900/50 border border-slate-700/50 rounded-2xl px-5 py-4 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 focus:bg-slate-900/70 transition-all resize-none custom-scrollbar"
+                placeholder="Type your message..."
+                rows={2}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+              />
+              <div className="absolute bottom-4 right-4 flex items-center gap-2 text-xs text-slate-500">
+                <i className="fa-solid fa-info-circle"></i>
+                <span>Press Enter to send</span>
+              </div>
+            </div>
+            <button
+              onClick={sendMessage}
+              className="group relative overflow-hidden bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold px-8 py-4 rounded-2xl transition-all duration-300 hover:scale-105 shadow-lg shadow-indigo-500/30 flex items-center gap-3"
+            >
+              <span>Send</span>
+              <i className="fa-solid fa-paper-plane group-hover:translate-x-1 transition-transform"></i>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
