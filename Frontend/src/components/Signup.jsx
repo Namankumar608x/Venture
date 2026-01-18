@@ -15,13 +15,13 @@ function Signup() {
   });
 
   const [message, setMessage] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
-  // auto-login if token exists
+  /* -----------------------------------------------------------
+     AUTO LOGIN IF TOKEN EXISTS
+  ----------------------------------------------------------- */
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
     if (!token) return;
@@ -45,7 +45,9 @@ function Signup() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  /* ---------------- SIGNUP → SEND OTP ---------------- */
+  /* -----------------------------------------------------------
+     SIGNUP (NO OTP)
+  ----------------------------------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -53,7 +55,7 @@ function Signup() {
     try {
       setLoading(true);
 
-      await axiosInstance.post("/auth/signup", {
+      const res = await axiosInstance.post("/auth/signup", {
         username: formData.username,
         name: formData.name,
         roll_number: formData.roll_number,
@@ -62,41 +64,17 @@ function Signup() {
         password: formData.password,
       });
 
-      setOtpSent(true);
-      setMessage("OTP sent to your email");
-    } catch (err) {
-      setMessage(err.response?.data?.message || "Signup failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+      const { accessToken, refreshToken, user } = res.data;
 
-  /* ---------------- VERIFY OTP ---------------- */
-  const handleVerifyOtp = async () => {
-    if (!otp) {
-      setMessage("Please enter OTP");
-      return;
-    }
+      localStorage.setItem("accessToken", accessToken);
+      localStorage.setItem("refreshToken", refreshToken);
+      localStorage.setItem("user", JSON.stringify(user));
 
-    try {
-      setLoading(true);
-
-      const res = await axiosInstance.post("/auth/verify-signup-otp", {
-        email: formData.email,
-        otp,
-      });
-
-      const token = res.data.accessToken;
-
-      localStorage.setItem("accessToken", token);
-      localStorage.setItem("refreshToken", res.data.refreshToken || "");
-      localStorage.setItem("user", JSON.stringify(res.data.user || {}));
-
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      axios.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
 
       navigate("/home", { replace: true });
     } catch (err) {
-      setMessage(err.response?.data?.message || "OTP verification failed");
+      setMessage(err.response?.data?.message || "Signup failed");
     } finally {
       setLoading(false);
     }
@@ -113,91 +91,71 @@ function Signup() {
           Join <span className="font-semibold text-indigo-300">Venture</span>
         </p>
 
-        {!otpSent ? (
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <input
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              placeholder="Username"
-              className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
-              required
-            />
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <input
+            name="username"
+            value={formData.username}
+            onChange={handleChange}
+            placeholder="Username"
+            className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
+            required
+          />
 
-            <input
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="Full Name"
-              className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
-              required
-            />
+          <input
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            placeholder="Full Name"
+            className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
+            required
+          />
 
-            <input
-              name="roll_number"
-              value={formData.roll_number}
-              onChange={handleChange}
-              placeholder="Roll Number"
-              className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
-            />
+          <input
+            name="roll_number"
+            value={formData.roll_number}
+            onChange={handleChange}
+            placeholder="Roll Number"
+            className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
+          />
 
-            <select
-              name="gender"
-              value={formData.gender}
-              onChange={handleChange}
-              className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
-            >
-              <option value="">Select Gender</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
+          <select
+            name="gender"
+            value={formData.gender}
+            onChange={handleChange}
+            className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
+          >
+            <option value="">Select Gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
 
-            <input
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="Email"
-              className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
-              required
-            />
+          <input
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="Email"
+            className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
+            required
+          />
 
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Password"
-              className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
-              required
-            />
+          <input
+            type="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            placeholder="Password"
+            className="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
+            required
+          />
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2.5 rounded-lg font-semibold"
-            >
-              {loading ? "Sending OTP..." : "Create Account"}
-            </button>
-          </form>
-        ) : (
-          <>
-            <input
-              type="text"
-              placeholder="Enter OTP"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-              className="w-full mt-3 p-2.5 bg-gray-950 border border-gray-700 rounded-lg"
-            />
-
-            <button
-              onClick={handleVerifyOtp}
-              disabled={loading}
-              className="w-full mt-3 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg"
-            >
-              {loading ? "Verifying..." : "Verify OTP"}
-            </button>
-          </>
-        )}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2.5 rounded-lg font-semibold"
+          >
+            {loading ? "Creating account..." : "Create Account"}
+          </button>
+        </form>
 
         {message && (
           <p className="text-center mt-4 text-sm text-red-400">{message}</p>
@@ -205,7 +163,10 @@ function Signup() {
 
         <p className="text-sm text-center mt-6 text-gray-400">
           Already have an account?{" "}
-          <Link to="/login" className="text-indigo-400 font-semibold hover:underline">
+          <Link
+            to="/login"
+            className="text-indigo-400 font-semibold hover:underline"
+          >
             Login
           </Link>
         </p>
