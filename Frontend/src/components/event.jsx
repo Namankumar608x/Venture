@@ -21,14 +21,18 @@ function EventsDashboard() {
   const [isCreating, setIsCreating] = useState(false);
   const navigate = useNavigate();
   const [showShare, setShowShare] = useState(false);
+  const [clubEvents, setClubEvents] = useState([]);
+  
   const FRONTEND_URL = "https://venture-flax.vercel.app";
   const link = `${FRONTEND_URL}/events/${clubid}/login`;
+
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
     if (token)
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     fetchClubs();
   }, []);
+
   const leaveClub = async (clubId) => {
     if (!window.confirm("Are you sure you want to leave this club?")) return;
 
@@ -42,11 +46,12 @@ function EventsDashboard() {
         config
       );
 
-      fetchClubs(); // refresh lists
+      fetchClubs();
     } catch (err) {
       alert(err.response?.data?.message || "Failed to leave club");
     }
   };
+
   const deleteClub = async (clubId) => {
     if (
       !window.confirm(
@@ -102,16 +107,12 @@ function EventsDashboard() {
       setMessage("");
       const config = getAuthConfig();
       if (!config) return;
-      // existing endpoints used in Home.jsx
       const [adminRes, partRes] = await Promise.all([
         axiosInstance.get("/clubs/my-admin", config),
         axiosInstance.get("/clubs/participant", config),
       ]);
       setMyAdminClubs(adminRes.data.tournaments || adminRes.data.clubs || []);
       setParticipantClubs(partRes.data.tournaments || partRes.data.clubs || []);
-      // pick the first admin club as default selection
-      const first = (adminRes.data.tournaments || adminRes.data.clubs || [])[0];
-      
     } catch (err) {
       console.error(err);
       setMessage(err.response?.data?.error || "Failed to load clubs");
@@ -121,6 +122,7 @@ function EventsDashboard() {
   const sharelink = () => {
     setShowShare(true);
   };
+
   const handleCreateEvent = async (e) => {
     e.preventDefault();
     if (!selectedClub) {
@@ -164,7 +166,7 @@ function EventsDashboard() {
         config
       );
 
-      return res.data.events || []; // return the array
+      return res.data.events || [];
     } catch (err) {
       console.error("fetchEventsForClub error", err);
       setMessage(err.response?.data?.message || "Failed to load events");
@@ -172,220 +174,258 @@ function EventsDashboard() {
     }
   };
 
-  // quick preview state for events under selected club
-  const [clubEvents, setClubEvents] = useState([]);
   useEffect(() => {
     (async () => {
       if (!selectedClub) return setClubEvents([]);
       const events = await fetchEventsForClub(selectedClub);
       setClubEvents(events);
     })();
-    // eslint-disable-next-line
   }, [selectedClub]);
 
+  const inputClass = "w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all";
+  const cardClass = "bg-gradient-to-br from-slate-800/60 to-slate-800/40 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-700/50 p-6";
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 flex items-start justify-center">
-      <div className="w-full max-w-5xl relative z-10">
-        <div className="flex items-center justify-between mb-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+      <div className="w-full max-w-7xl mx-auto relative z-10">
+        
+        {/* Header */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
           <div>
-            {showShare && (
-              <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-                {/* BACKDROP */}
-                <div
-                  className="absolute inset-0 bg-black/60"
-                  onClick={() => setShowShare(false)}
-                />
-
-                {/* MODAL BOX */}
-                <div className="relative bg-slate-800 w-full max-w-md rounded-xl shadow-2xl p-6 z-[10000]">
-                  <h2 className="text-lg font-semibold mb-3 text-white">
-                    Share Link
-                  </h2>
-
-                  {/* LINK BOX */}
-                  <div className="flex items-center gap-2 bg-slate-900 p-2 rounded">
-                    <input
-                      value={link}
-                      readOnly
-                      className="flex-1 bg-transparent text-sm text-slate-300 outline-none"
-                    />
-
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(link);
-                        alert("Link copied!");
-                      }}
-                      className="px-3 py-1 bg-blue-600 rounded text-xs"
-                    >
-                      Copy
-                    </button>
-                  </div>
-
-                  {/* CLOSE */}
-                  <div className="text-right mt-4">
-                    <button
-                      onClick={() => setShowShare(false)}
-                      className="text-sm text-slate-400 hover:text-white"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
-              Events <span className="text-blue-500">Manager</span>
+            <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight mb-2">
+              Events <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Manager</span>
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Create events inside your clubs.
-            </p>
+            <p className="text-slate-400">Create and manage events inside your clubs</p>
           </div>
           <button
             onClick={sharelink}
-            className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700"
+            className="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-white border border-blue-500/30 hover:border-blue-500/50 transition-all duration-200 flex items-center gap-2 hover:scale-105"
           >
-            Share direct link to join your club
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+            Share Club Link
           </button>
         </div>
 
-        <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 p-6 md:p-8">
-          <div className="grid md:grid-cols-2 gap-8">
+        {/* Share Modal */}
+        {showShare && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              onClick={() => setShowShare(false)}
+            />
+
+            <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 w-full max-w-md rounded-2xl shadow-2xl p-6 z-[10000] border border-slate-700/50">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Share Link
+                </h2>
+                <button
+                  onClick={() => setShowShare(false)}
+                  className="text-slate-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                <input
+                  value={link}
+                  readOnly
+                  className="flex-1 bg-transparent text-sm text-slate-300 outline-none"
+                />
+
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(link);
+                    alert("Link copied!");
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg text-sm font-semibold hover:shadow-lg transition-all hover:scale-105"
+                >
+                  Copy
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-400 mt-3">Share this link with others to join your club</p>
+            </div>
+          </div>
+        )}
+
+        {/* Main Content Grid */}
+        <div className={cardClass + " mb-8"}>
+          <div className="grid lg:grid-cols-2 gap-8">
+            
+            {/* Create Event Section */}
             <div>
-              <h2 className="text-xl font-semibold text-white mb-2">
+              <h2 className="text-2xl font-bold text-white mb-3 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                </div>
                 Create Event
               </h2>
-              <p className="text-slate-400 text-sm mb-4">
-                Select club (tournament) and create an event inside it.
-              </p>
+              <p className="text-slate-400 text-sm mb-6">Select a club and create an event inside it</p>
 
-              <form onSubmit={handleCreateEvent} className="space-y-3">
-                <select
-                  value={selectedClub}
-                  onChange={(e) => setSelectedClub(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Select a club (tournament)</option>
-                  {myAdminClubs.map((c) => (
-                    <option key={c._id || c.id} value={c._id || c.id}>
-                      {c.name || `Club ${c._id || c.id}`}
-                    </option>
-                  ))}
-                </select>
+              <form onSubmit={handleCreateEvent} className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-slate-300 mb-2 block">Select Club *</label>
+                  <select
+                    value={selectedClub}
+                    onChange={(e) => setSelectedClub(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Select a club (tournament)</option>
+                    {myAdminClubs.map((c) => (
+                      <option key={c._id || c.id} value={c._id || c.id}>
+                        {c.name || `Club ${c._id || c.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                <input
-                  type="text"
-                  value={event.name}
-                  onChange={(e) => setEvent({ ...event, name: e.target.value })}
-                  placeholder="Event name(e.g. Football Club 2026)"
-                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
-                <input
-                  type="text"
-                  value={event.description}
-                  onChange={(e) =>
-                    setEvent({ ...event, description: e.target.value })
-                  }
-                  placeholder="Event description"
-                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
-                <input
-                  type="number"
-                  value={event.maxPlayer}
-                  onChange={(e) =>
-                    setEvent({ ...event, maxPlayer: e.target.value })
-                  }
-                  placeholder="Max players in a team"
-                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
-                <select
-                  value={status}
-                  onChange={(e) => setstatus(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Select status</option>
+                <div>
+                  <label className="text-sm font-medium text-slate-300 mb-2 block">Event Name *</label>
+                  <input
+                    type="text"
+                    value={event.name}
+                    onChange={(e) => setEvent({ ...event, name: e.target.value })}
+                    placeholder="e.g. Football Championship 2026"
+                    className={inputClass}
+                  />
+                </div>
 
-                  <option key="registration" value="registration">
-                    Registration Open
-                  </option>
-                  <option key="draft" value="draft">
-                    Draft
-                  </option>
-                </select>
-                <select
-                  value={teamc}
-                  onChange={(e) => setteamc(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Select team creation rights</option>
+                <div>
+                  <label className="text-sm font-medium text-slate-300 mb-2 block">Description</label>
+                  <textarea
+                    value={event.description}
+                    onChange={(e) => setEvent({ ...event, description: e.target.value })}
+                    placeholder="Event description"
+                    className={inputClass}
+                    rows={2}
+                  />
+                </div>
 
-                  <option key="admin" value="admin">
-                    Admin/Manager's only
-                  </option>
-                  <option key="users" value="users">
-                    All users
-                  </option>
-                </select>
+                <div>
+                  <label className="text-sm font-medium text-slate-300 mb-2 block">Max Players per Team</label>
+                  <input
+                    type="number"
+                    value={event.maxPlayer}
+                    onChange={(e) => setEvent({ ...event, maxPlayer: e.target.value })}
+                    placeholder="e.g. 11"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-slate-300 mb-2 block">Status</label>
+                    <select
+                      value={status}
+                      onChange={(e) => setstatus(e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">Select status</option>
+                      <option value="registration">Registration Open</option>
+                      <option value="draft">Draft</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-slate-300 mb-2 block">Team Creation</label>
+                    <select
+                      value={teamc}
+                      onChange={(e) => setteamc(e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">Select rights</option>
+                      <option value="admin">Admin/Manager's only</option>
+                      <option value="users">All users</option>
+                    </select>
+                  </div>
+                </div>
 
                 <button
                   type="submit"
                   disabled={isCreating}
-                  className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-[1.01] transition duration-150 disabled:opacity-50 text-sm"
+                  className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {isCreating ? "Creating..." : "Create Event"}
+                  {isCreating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Create Event
+                    </>
+                  )}
                 </button>
               </form>
             </div>
 
+            {/* Quick Actions Section */}
             <div>
-              <h2 className="text-xl font-semibold text-white mb-2">
+              <h2 className="text-2xl font-bold text-white mb-3 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
                 Quick Actions
               </h2>
-              <p className="text-slate-400 text-sm mb-4">
-                Use the event list below to open event dashboard, or paste an
-                event ID to open.
-              </p>
+              <p className="text-slate-400 text-sm mb-6">Jump to events or paste an Event ID</p>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex gap-2">
                   <input
                     type="text"
                     placeholder="Paste Event ID to open"
-                    className="flex-1 px-4 py-3 bg-slate-800/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    className={inputClass + " flex-1"}
                     id="openEventId"
                   />
 
                   <button
                     onClick={() => {
-                      const val = document
-                        .getElementById("openEventId")
-                        .value.trim();
+                      const val = document.getElementById("openEventId").value.trim();
                       if (val) navigate(`/events/${val}`);
                     }}
-                    className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 text-sm border border-slate-700 hover:bg-slate-700 transition"
+                    className="px-5 py-3 rounded-xl bg-slate-700/50 hover:bg-slate-600/50 text-white border border-slate-600 transition-all hover:scale-105"
                   >
                     Open
                   </button>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold text-white mb-2">
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
                     Selected Club Events
                   </h3>
                   {clubEvents.length === 0 ? (
-                    <p className="text-slate-500 text-sm">
-                      No events for this club yet.
-                    </p>
+                    <div className="p-6 text-center rounded-xl bg-slate-900/40 border border-slate-700/50">
+                      <svg className="w-12 h-12 mx-auto mb-3 opacity-20 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                      </svg>
+                      <p className="text-slate-500 text-sm">No events for this club yet</p>
+                    </div>
                   ) : (
-                    <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                    <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
                       {clubEvents.map((ev) => (
                         <EventCard
                           key={ev._id || ev.id}
                           event={ev}
-                          onOpen={() =>
-                            navigate(
-                              `/events/${selectedClub}/${ev._id || ev.id}`
-                            )
-                          }
+                          onOpen={() => navigate(`/events/${selectedClub}/${ev._id || ev.id}`)}
                         />
                       ))}
                     </div>
@@ -395,81 +435,104 @@ function EventsDashboard() {
             </div>
           </div>
 
+          {/* Message Display */}
           {message && (
-            <div className="mt-6">
-              <div className="p-3 rounded-lg text-sm text-center bg-slate-800/70 border border-slate-700 text-slate-100">
-                {message}
-              </div>
+            <div className={`mt-6 p-4 rounded-xl text-sm text-center flex items-center justify-center gap-2 ${
+              message.includes('Failed') || message.includes('failed') || message.includes('required')
+                ? 'bg-red-500/10 border border-red-500/30 text-red-300'
+                : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+            }`}>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {message}
             </div>
           )}
+        </div>
 
-          <div className="mt-8 grid md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-2">
-                Your Clubs (Admin)
-              </h3>
-              {myAdminClubs.length === 0 ? (
-                <p className="text-slate-500 text-sm">
-                  You don't admin any clubs yet.
-                </p>
-              ) : (
-                <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
-                  {myAdminClubs.map((c) => (
-                    <div
-                      key={c._id || c.id}
-                      className="bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3 flex justify-between items-center text-sm text-slate-100"
-                    >
-                      <div>
-                        <div className="font-medium">
-                          {c.name || "Unnamed Club"}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          ID: {c._id || c.id}
-                        </div>
-                      </div>{" "}
+        {/* Clubs Lists */}
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Admin Clubs */}
+          <div className={cardClass}>
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <svg className="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              Your Clubs (Admin)
+            </h3>
+            {myAdminClubs.length === 0 ? (
+              <div className="p-8 text-center rounded-xl bg-slate-900/40 border border-slate-700/50">
+                <svg className="w-16 h-16 mx-auto mb-3 opacity-20 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+                <p className="text-slate-500">You don't admin any clubs yet</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                {myAdminClubs.map((c) => (
+                  <div
+                    key={c._id || c.id}
+                    className="bg-slate-900/40 border border-slate-700/50 rounded-xl px-4 py-3 flex justify-between items-center hover:border-slate-600/50 transition-all group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-white truncate group-hover:text-blue-400 transition-colors">
+                        {c.name || "Unnamed Club"}
+                      </div>
+                      <div className="text-xs text-slate-500 font-mono">
+                        ID: {c._id || c.id}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
                       <button
-                        onClick={() => {
-                          deleteClub(c._id || c.id);
-                        }}
-                        className="text-xs px-3 py-1 rounded-md bg-red-600 hover:bg-blue-500 text-white"
+                        onClick={() => deleteClub(c._id || c.id)}
+                        className="px-3 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/30 text-xs font-medium transition-all"
                       >
                         Delete
                       </button>
                       <button
                         onClick={() => setSelectedClub(c._id || c.id)}
-                        className="text-xs px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white"
+                        className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-600/30 text-xs font-medium transition-all"
                       >
                         Select
                       </button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-2">
-                Clubs You Joined
-              </h3>
-              {participantClubs.length === 0 ? (
-                <p className="text-slate-500 text-sm">
-                  You haven't joined any clubs yet.
-                </p>
-              ) : (
-                <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
-                  {participantClubs.map((c) => (
-                    <div
-                      key={c._id || c.id}
-                      className="bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3 flex justify-between items-center text-sm text-slate-100"
-                    >
-                      <div>
-                        <div className="font-medium">
-                          {c.name || "Unnamed Club"}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          ID: {c._id || c.id}
-                        </div>
+          {/* Joined Clubs */}
+          <div className={cardClass}>
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Clubs You Joined
+            </h3>
+            {participantClubs.length === 0 ? (
+              <div className="p-8 text-center rounded-xl bg-slate-900/40 border border-slate-700/50">
+                <svg className="w-16 h-16 mx-auto mb-3 opacity-20 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                <p className="text-slate-500">You haven't joined any clubs yet</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                {participantClubs.map((c) => (
+                  <div
+                    key={c._id || c.id}
+                    className="bg-slate-900/40 border border-slate-700/50 rounded-xl px-4 py-3 flex justify-between items-center hover:border-slate-600/50 transition-all group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-white truncate group-hover:text-emerald-400 transition-colors">
+                        {c.name || "Unnamed Club"}
                       </div>
+                      <div className="text-xs text-slate-500 font-mono">
+                        ID: {c._id || c.id}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
                       {!myAdminClubs.some(
                         (adminClub) =>
                           String(adminClub._id || adminClub.id) ===
@@ -477,22 +540,22 @@ function EventsDashboard() {
                       ) && (
                         <button
                           onClick={() => leaveClub(c._id || c.id)}
-                          className="text-xs px-3 py-1 rounded-md bg-red-700 hover:bg-slate-600 text-white"
+                          className="px-3 py-1.5 rounded-lg bg-red-700/20 hover:bg-red-700/30 text-red-400 border border-red-700/30 text-xs font-medium transition-all"
                         >
                           Leave
                         </button>
                       )}
                       <button
                         onClick={() => setSelectedClub(c._id || c.id)}
-                        className="text-xs px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100"
+                        className="px-3 py-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 border border-slate-600 text-xs font-medium transition-all"
                       >
                         Select
                       </button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
